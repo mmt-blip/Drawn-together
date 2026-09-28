@@ -75,7 +75,7 @@
     .route.selected .car:not(.laid){fill-opacity:.9;animation:pulse 1.1s ease-in-out infinite}
   .route.win .car{filter:drop-shadow(0 0 5px rgba(255,200,220,.6))}
   @keyframes pulse{50%{fill-opacity:.35}}
-  .city-label{font-family:var(--body);font-weight:600;font-size:14px;fill:var(--ink);paint-order:stroke;stroke:var(--land);stroke-width:4px;stroke-linejoin:round}
+  .city-label{font-family:var(--body);font-weight:600;font-size:14px;fill:var(--ink);paint-order:stroke;stroke:var(--land);stroke-width:4px;stroke-linejoin:round;pointer-events:none}
   .city-label.end{font-family:var(--ui);font-weight:800;font-size:20px;letter-spacing:.04em;text-transform:uppercase}
   .geo-label{font-family:var(--mono);font-size:11px;letter-spacing:.3em;fill:var(--faint);text-transform:uppercase}
   .board-foot{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;align-items:center;padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--muted)}
@@ -962,14 +962,13 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
     return out;
   };
 
-  // At least enough stops to comfortably reach a 20-route board with only
-  // short, local connections (see edge-building below) — a longer trip gets
-  // more stops so the extra routes come from a dense little cluster of
-  // nearby cities, not a handful of far-flung diagonals. Capped at 13 so a
-  // very long haul still stays readable on a phone.
+  // How many real cities to pick as stops. Route *count* no longer depends on
+  // this (see the parallel-lane edges below), so this only needs to be as
+  // many as makes a good-looking, readable chain — capped at 9 so a very
+  // long haul still stays legible on a phone.
   // tagged cities occupy the stretch of the trip they fall in, so the auto
   // picks fill in around them instead of doubling up.
-  const target = Math.max(0, Math.min(13, Math.round(totalDist / 1.4)));
+  const target = Math.max(0, Math.min(9, Math.round(totalDist / 2.2)));
   const filled = new Array(target).fill(false);
   picks.forEach(p => { const b = Math.min(target-1, Math.floor(p.t*target)); if (b >= 0) filled[b] = true; });
 
@@ -1010,128 +1009,66 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
   // re-unwrap start/end too, for a consistent coordinate space
   CITIES[startId].lon = sLon; CITIES[endId].lon = eLon;
 
-  // ---------- project to the fixed viewBox (1060x620), used for pixel
-  // distances (cars/theming) exactly like the original fixed map did ----------
-  const VB_W=1060, VB_H=620, PAD=110;
-
-  // Schematic ("metro map") layout instead of raw geography: stops are spaced
-  // evenly along the start→end line (blended a little with their true
-  // position so the order still feels geographic) and keep their real side of
-  // the line, but their sideways offset is clamped. Result: no clusters of
-  // three cities in one corner, no giant empty ocean gaps, and a forced city
-  // from far away sits neatly in the line instead of raking across the map.
+  // ---------- lay out the board as a single serpentine line, not a real map
+  // or a mesh graph. Every node connects only to its immediate chain
+  // neighbour, so there is never a crossing line, never a hub, and never an
+  // empty region — the wave always uses the exact same footprint. Multiple
+  // parallel "lanes" (like the double-track routes on a real Ticket to Ride
+  // board) between adjacent stops supply the route count instead of
+  // long-distance shortcuts. ----------
+  const VB_W=1060, VB_H=620;
+  const PAD_X = 170, PAD_Y = 95;
   const n = ids.length;
-  const lay = ids.map((id,i)=>{
+  const usableW = VB_W - 2*PAD_X, amp = (VB_H - 2*PAD_Y) / 2;
+  ids.forEach((id,i)=>{
     const c = CITIES[id];
-    if (i === 0) return {lon: sLon, lat: start.lat};
-    if (i === n-1) return {lon: eLon, lat: end.lat};
-    const cx = c.lon - sLon, cy = c.lat - start.lat;
-    const tReal = Math.max(0, Math.min(1, (cx*dx0 + cy*dy0) / (totalDist*totalDist)));
-    const u = 0.18*tReal + 0.82*(i/(n-1));
-    const vReal = (cx*dy0 - cy*dx0) / (totalDist*totalDist);
-    // mostly a steady alternating zigzag, with a little real geography mixed
-    // in: keeps the rough shape recognizable while guaranteeing an even,
-    // spread-out Ticket-to-Ride board instead of everything hugging one line.
-    const alt = (i % 2 ? 1 : -1) * 0.16;
-    const v = 0.35*Math.max(-0.22, Math.min(0.22, vReal*1.2)) + alt;
-    return { lon: sLon + u*dx0 + v*dy0, lat: start.lat + u*dy0 - v*dx0 };
+    c.x = n > 1 ? PAD_X + i * usableW/(n-1) : VB_W/2;
+    // a smooth envelope (0 at both ends, full swing in the middle) times an
+    // alternating up/down sign — a single continuous river-like curve.
+    const env = n > 2 ? Math.sin(Math.PI * i/(n-1)) : 0;
+    c.y = VB_H/2 + amp * env * (i % 2 ? 1 : -1);
   });
-  const lons = lay.map(p=>p.lon), lats = lay.map(p=>p.lat);
-  const lonMin=Math.min(...lons), lonMax=Math.max(...lons), latMin=Math.min(...lats), latMax=Math.max(...lats);
-  const spanLon = Math.max(lonMax-lonMin, 0.5), spanLat = Math.max(latMax-latMin, 0.5);
-  // independent per-axis scaling (not a single uniform min(sx,sy)) so a trip
-  // fills the frame's width and height regardless of its true geographic
-  // aspect ratio, instead of leaving big empty margins on a lopsided route.
-  // Each axis is still capped against the other's scale (x1.9) so a very
-  // thin sliver of a route doesn't get grotesquely stretched on one axis.
-  // wider side margins than top/bottom: that's where the big endpoint labels live
-  const PAD_X = 190, PAD_Y = 60;
-  let sx = (VB_W-2*PAD_X)/spanLon, sy = (VB_H-2*PAD_Y)/spanLat;
-  const capRatio = 2.3;
-  if (sx > sy*capRatio) sx = sy*capRatio;
-  if (sy > sx*capRatio) sy = sx*capRatio;
-  const cxLon = (lonMin+lonMax)/2, cyLat = (latMin+latMax)/2;
-  const px = (lon,lat) => [ VB_W/2 + (lon-cxLon)*sx, VB_H/2 - (lat-cyLat)*sy ];
-  ids.forEach((id,i)=>{ const [x,y]=px(lay[i].lon, lay[i].lat); CITIES[id].x=x; CITIES[id].y=y; });
 
-  // ---------- edges: a clean chain (nodes are already ordered along the
-  // start→end line) plus the closest remaining pairs, measured on the actual
-  // rendered map, added until the board has at least 20 routes — a floor
-  // that keeps the board feeling rich even on a modest trip. A per-node cap
-  // stops any single city turning into a tangled hub. ----------
-  const edgeKey = (x,y)=> x<y ? x+"|"+y : y+"|"+x;
-  const edgeSet = new Map(); // key -> [idA,idB]
-  const nodeDeg = new Array(ids.length).fill(0);
-  const addEdge = (i,j) => {
-    if (i<0||j>=ids.length||i===j) return false;
-    const k = edgeKey(ids[i],ids[j]);
-    if (edgeSet.has(k)) return false;
-    edgeSet.set(k, [ids[i], ids[j]]); nodeDeg[i]++; nodeDeg[j]++; return true;
-  };
-  const pxDist = (i,j) => Math.hypot(CITIES[ids[i]].x-CITIES[ids[j]].x, CITIES[ids[i]].y-CITIES[ids[j]].y);
-
-  for (let i=0;i<ids.length-1;i++) addEdge(i,i+1);
-
-  const MIN_ROUTES = 20, MAX_DEGREE = 4;
-  // Spread the extra routes evenly along the whole line instead of piling
-  // them onto whichever stretch happens to have the most nearby cities:
-  // round-robin through each node in turn, each time adding its single
-  // closest still-available short connection, widening the search window
-  // only once a full round adds nothing. That keeps every stretch of the
-  // trip roughly equally "busy" rather than one dense knot and a bare chain.
-  for (const maxSkip of [3, 5, ids.length]){
-    let addedThisStage = true;
-    while (edgeSet.size < MIN_ROUTES && addedThisStage){
-      addedThisStage = false;
-      for (let i=0; i<ids.length && edgeSet.size < MIN_ROUTES; i++){
-        if (nodeDeg[i] >= MAX_DEGREE) continue;
-        let best = -1, bestD = Infinity;
-        for (let j=0; j<ids.length; j++){
-          if (j===i || Math.abs(j-i) < 2 || Math.abs(j-i) > maxSkip) continue;
-          if (nodeDeg[j] >= MAX_DEGREE) continue;
-          if (edgeSet.has(edgeKey(ids[i],ids[j]))) continue;
-          const d = pxDist(i,j);
-          if (d < bestD){ bestD = d; best = j; }
-        }
-        if (best >= 0 && addEdge(i,best)) addedThisStage = true;
-      }
-    }
-    if (edgeSet.size >= MIN_ROUTES) break;
+  // ---------- parallel lanes per segment, tuned so the whole board totals
+  // close to 20 routes without ever exceeding 3 lanes on one segment (any
+  // more reads as clutter) or dropping below 1. ----------
+  const segments = Math.max(0, n - 1);
+  const TARGET_ROUTES = 20;
+  const lanesPerSeg = new Array(segments).fill(2);
+  const order = [...Array(segments).keys()];
+  for (let i=order.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+  let totalLanes = segments * 2;
+  if (totalLanes < TARGET_ROUTES){
+    let need = Math.min(TARGET_ROUTES - totalLanes, segments);
+    for (let k=0;k<need;k++) lanesPerSeg[order[k]] = 3;
+  } else if (totalLanes > TARGET_ROUTES){
+    let excess = Math.min(totalLanes - TARGET_ROUTES, segments);
+    for (let k=0;k<excess;k++) lanesPerSeg[order[k]] = 1;
   }
 
-  const edges = [...edgeSet.values()];
-
-  // ---------- label anchors: push labels outward from the centroid ----------
-  const centroidX = ids.reduce((s,id)=>s+CITIES[id].x,0)/ids.length;
-  const centroidY = ids.reduce((s,id)=>s+CITIES[id].y,0)/ids.length;
-  ids.forEach(id=>{
-    const c = CITIES[id]; const vx=c.x-centroidX, vy=c.y-centroidY;
-    if (Math.abs(vx) > Math.abs(vy)*1.15){
-      c.a = vx >= 0 ? "start" : "end"; c.dx = vx>=0 ? 12 : -12; c.dy = 4;
-    } else {
-      c.a = "middle"; c.dx = 0; c.dy = vy >= 0 ? 24 : -18;
-    }
-    // endpoints: big uppercase label pointing *outward*, away from the whole
-    // network, so it never collides with a neighbouring stop. Side-on for a
-    // mostly left↔right trip (if the name fits the margin), else above/below.
-    if (c.end){
-      const S = CITIES[startId], E = CITIES[endId];
-      const horiz = Math.abs(E.x - S.x) >= Math.abs(E.y - S.y);
-      const fits = c.n.length * 18 + 24 < PAD_X;
-      if (horiz && fits){ c.a = vx >= 0 ? "start" : "end"; c.dx = vx >= 0 ? 16 : -16; c.dy = 7; }
-      else { c.a = "middle"; c.dx = 0; c.dy = vy <= 0 ? -20 : 36; }
-    }
+  // ---------- label anchors: every stop — endpoints included — sits on the
+  // outside of its own little bulge (below a dip, above a peak) so a label
+  // never collides with the curve or, for a long city name, the endpoint's
+  // ring marker (endpoints always start at the vertical center, so a
+  // sideways label would butt straight into the ring instead). ----------
+  ids.forEach((id,i)=>{
+    const c = CITIES[id];
+    const below = c.end ? true : c.y > VB_H/2;
+    c.a = "middle"; c.dx = 0;
+    // endpoints get extra clearance: their segment can carry up to 3 parallel
+    // lanes fanned out from the node, and the label needs to clear the
+    // widest one plus its own text ascent, not just the bare node/ring.
+    c.dy = c.end ? (below ? 44 : -36) : (below ? 24 : -18);
     // keep every label fully inside the frame, using an estimated text width
-    const w = c.n.length * (c.end ? 18 : 8.4);
-    const left  = c.a === "start" ? c.x + c.dx : c.a === "end" ? c.x + c.dx - w : c.x + c.dx - w/2;
-    const right = left + w;
+    const w = c.n.length * (c.end ? 15.5 : 8.4);
+    const left = c.x + c.dx - w/2, right = left + w;
     if (left < 10) c.dx += 10 - left;
     else if (right > VB_W - 10) c.dx -= right - (VB_W - 10);
-    if (c.y + c.dy < 24) c.dy = 26 - c.y + 0;
-    else if (c.y + c.dy > VB_H - 10) c.dy = VB_H - 10 - c.y;
+    if (c.y + c.dy < 20) c.dy = 22 - c.y;
+    else if (c.y + c.dy > VB_H - 8) c.dy = VB_H - 8 - c.y;
   });
 
-  // ---------- themes + car counts, from the projected pixel length ----------
+  // ---------- themes + car counts ----------
   // "depth" (light / balanced / deep) weights which card categories come up
   // more often — every category still appears at least once, just more or
   // less frequently, so the couple gets a board that matches how deep they
@@ -1143,13 +1080,23 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
   };
   const wmap = DEPTH_WEIGHTS[depth] || DEPTH_WEIGHTS.balanced;
   const shuffledThemes = [];
-  THEME_KEYS.forEach(k => { const w = wmap[THEME_DEPTH[k]] || 1; for (let n=0; n<w; n++) shuffledThemes.push(k); });
+  THEME_KEYS.forEach(k => { const w = wmap[THEME_DEPTH[k]] || 1; for (let m=0; m<w; m++) shuffledThemes.push(k); });
   for (let i=shuffledThemes.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [shuffledThemes[i],shuffledThemes[j]]=[shuffledThemes[j],shuffledThemes[i]]; }
-  const ROUTES = edges.map(([x,y],i)=>{
-    const A=CITIES[x], B=CITIES[y], d=Math.hypot(B.x-A.x,B.y-A.y);
-    const t = shuffledThemes[i % shuffledThemes.length];
-    return {id:"r"+i, a:x, b:y, t, len:d, cars:Math.max(2,Math.min(4,Math.round(d/70)))};
-  });
+
+  const ROUTES = [];
+  for (let s=0; s<segments; s++){
+    const A = CITIES[ids[s]], B = CITIES[ids[s+1]];
+    const d = Math.hypot(B.x-A.x, B.y-A.y);
+    const lanes = lanesPerSeg[s];
+    for (let lane=0; lane<lanes; lane++){
+      const t = shuffledThemes[ROUTES.length % shuffledThemes.length];
+      ROUTES.push({
+        id:"r"+ROUTES.length, a:ids[s], b:ids[s+1], t, len:d,
+        cars:Math.max(2,Math.min(4,Math.round(d/70))),
+        lane, lanes // which parallel track this is, and how many share the segment — the renderer offsets them apart
+      });
+    }
+  }
 
   return {ok:true, cities:CITIES, routes:ROUTES, startId, endId};
 }
@@ -1433,18 +1380,33 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
     ROUTES.forEach(r=>{
       const A=CITIES[r.a],B=CITIES[r.b];
       const ang = Math.atan2(B.y-A.y,B.x-A.x), deg = ang*180/Math.PI;
+      // parallel-lane offset: when several routes share the same A→B segment
+      // (this trip's "double track" stretches), nudge each one sideways,
+      // perpendicular to the segment, like adjacent tracks on a real board.
+      // The gap is wide enough that each lane's tap target (below) doesn't
+      // overlap its neighbour's — otherwise adjacent lanes would be
+      // impossible to tell apart with a tap or click.
+      const LANE_GAP = 20;
+      const laneOff = (r.lane - (r.lanes-1)/2) * LANE_GAP;
+      const px = -Math.sin(ang), py = Math.cos(ang);
+      const ox = px*laneOff, oy = py*laneOff;
+      const Ax=A.x+ox, Ay=A.y+oy, Bx=B.x+ox, By=B.y+oy;
       const trim=16, gap=6, L=r.len-2*trim, carL=(L-gap*(r.cars-1))/r.cars;
       const grp = el("g",{class:"route","data-id":r.id,tabindex:0,role:"button"},rg);
-      el("line",{class:"hit",x1:A.x,y1:A.y,x2:B.x,y2:B.y},grp);
+      // a single-lane segment keeps the full, easy-to-hit 28px tap width;
+      // a multi-lane segment narrows its tap width to fit within the lane
+      // gap above so neighbouring lanes never fight over the same tap.
+      const hitW = r.lanes > 1 ? Math.min(28, LANE_GAP - 3) : 28;
+      el("line",{class:"hit",style:`stroke-width:${hitW}px`,x1:Ax,y1:Ay,x2:Bx,y2:By},grp);
       for (let i=0;i<r.cars;i++){
         const d = trim + carL/2 + i*(carL+gap);
-        const cx = A.x + Math.cos(ang)*d, cy = A.y + Math.sin(ang)*d;
+        const cx = Ax + Math.cos(ang)*d, cy = Ay + Math.sin(ang)*d;
         el("rect",{class:"car",x:-carL/2,y:-7,width:carL,height:14,rx:3,fill:THEMES[r.t].c,"fill-opacity":.2,stroke:THEMES[r.t].c,transform:`translate(${cx.toFixed(1)} ${cy.toFixed(1)}) rotate(${deg.toFixed(2)})`},grp);
       }
       grp.addEventListener("click",()=>pickRoute(r.id));
       grp.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); pickRoute(r.id);} });
     });
-    const cg = el("g",{},svg);
+    const cg = el("g",{style:"pointer-events:none"},svg);
     for (const k in CITIES){
       const c=CITIES[k];
       if (c.end){ el("circle",{cx:c.x,cy:c.y,r:15,fill:"none",stroke:"var(--accent)","stroke-width":2},cg); }
