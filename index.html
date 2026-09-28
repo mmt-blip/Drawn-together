@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Drawn Closer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,6 +118,8 @@
   .copybox{width:100%;min-height:120px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;font:13px/1.45 var(--mono)}
   .toast{font-size:13px;color:var(--accent);min-height:1.2em;margin:0}
   .lastmove{margin:0 0 2px;font-size:13px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 12px;line-height:1.4}
+  textarea.ansbox{width:100%;box-sizing:border-box;margin:6px 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink);font:inherit;resize:vertical}
+  .ratebox{border:1px solid var(--line);background:var(--panel-2);border-radius:12px;padding:10px 12px;margin:0 0 10px}
   .lastmove span{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
   .payout{margin:0;font-size:13.5px;color:var(--muted)}
   .payout b{color:var(--ink)}
@@ -252,6 +255,13 @@
             <label class="depthopt"><input type="radio" name="depth" value="deep" autocomplete="off"><span>Deep &amp; vulnerable</span></label>
           </div>
         </fieldset>
+        <fieldset class="depthpick">
+          <legend>How do you answer?</legend>
+          <div class="depthopts" role="radiogroup" aria-label="How do you answer?">
+            <label class="depthopt"><input type="radio" name="mode" value="reveal" checked autocomplete="off"><span>Both write, then reveal</span></label>
+            <label class="depthopt"><input type="radio" name="mode" value="classic" autocomplete="off"><span>Answer in our chat</span></label>
+          </div>
+        </fieldset>
         <details class="setupExtra">
           <summary>Add stops along the way</summary>
           <label>Cities you'd love on the map<input type="text" id="setupExtraCities" maxlength="200" placeholder="e.g. Paris, Venice" autocomplete="off"></label>
@@ -288,12 +298,25 @@
       </aside>
     </div>
 
+    <section class="panel" id="historyBox" hidden>
+      <h2>Our answers</h2>
+      <p class="hint" style="margin:0 0 8px">Encrypted on your phones. The server only stores unreadable text, and only people with your full invite link can read it.</p>
+      <details id="historyDet"><summary>Read back what you wrote</summary><div id="historyList"></div></details>
+      <div class="actions"><button type="button" id="dlBtn">Download as a text file</button><button type="button" class="link" id="wipeBtn">Delete saved answers</button></div>
+    </section>
+
     <section class="panel">
       <h2>How to play</h2>
-      <ol class="rules">
+      <ol class="rules" id="rulesReveal" hidden>
+        <li><b>Draw a card.</b> Whoever's turn it is draws a route with two questions. You both get the same card.</li>
+        <li><b>Both write.</b> Answer in the app. Neither answer is shown until both are locked in, so nobody has to go first.</li>
+        <li><b>Showdown.</b> Read each other's answers, then rate them: 😐 1 car, 🙂 2, 🔥 3. The rating you get is the cars you lay.</li>
+        <li><b>Finish the line.</b> When complete routes connect the two cities, whoever laid the most cars picks the first date.</li>
+      </ol>
+      <ol class="rules" id="rulesClassic">
         <li><b>Draw for the other person.</b> On your turn, tap the big button for a random route, or pick one on the map.</li>
         <li><b>Send the card.</b> Copy the two questions into your chat. They answer one, or both if they're feeling brave.</li>
-        <li><b>They tap what they did.</b> One answer lays <b>1 car</b>, safe. Both answers go to you for a rating: 😐 0 cars, 🙂 2, 🔥 3.</li>
+        <li><b>They tap what they did.</b> One answer lays <b>1 car</b>, safe. Both answers go to you for a rating (whenever you have a moment, before you draw): 😐 1 car, 🙂 2, 🔥 3.</li>
         <li><b>Finish the line.</b> A route counts once all its cars are laid. When complete routes connect the two cities, whoever laid the most cars picks the first date.</li>
       </ol>
     </section>
@@ -1331,20 +1354,20 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
 
   const THEMES = {
     flirty:{name:"Flirty Express", short:"Flirty", desc:"Cheeky questions. Blushing allowed.", c:"#FF7A52", qs:[
-      "First thing you noticed on my profile?",
+      "First thing you noticed on the other person's profile?",
       "Be honest: what made you swipe right?",
-      "Rate my cat-photo game from 1 to 10. Be generous.",
+      "Rate your own cat-photo game from 1 to 10. Be honest.",
       "Describe your perfect first date in three steps.",
-      "What's your most charming move? Demonstrate it in one message.",
+      "What's your most charming move? Describe it in one line.",
       "Candlelit dinner or chaotic street food at midnight?",
-      "Describe your type in three words. Am I close?",
+      "Describe your type in three words. Is the other person close?",
       "What would you wear if we met tonight?",
-      "Send the song that sums up your mood right now.",
+      "Name the song that sums up your mood right now, and why.",
       "First date: hug hello, one kiss on the cheek, or two?",
-      "If I showed up in your city tomorrow, where are we going first?",
+      "If the other person showed up in your city tomorrow, where are you going first?",
       "The most attractive thing someone can do that has nothing to do with looks?",
       "What could someone say on a first date that would make you blush?",
-      "Send a selfie of your face reading this question.",
+      "Describe the face you're making while reading this question.",
       "Finish the sentence: \"The way to my heart is…\""
     ]},
     love:{name:"Relationship Goals", short:"Relationship", desc:"What you're actually looking for.", c:"#E0364A", qs:[
@@ -1367,7 +1390,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
       "First concert you ever went to. Proud or embarrassed?",
       "The dish that tastes most like home?",
       "What did 10-year-old you want to be when you grew up?",
-      "Worst haircut of your life. Describe it, or send proof.",
+      "Worst haircut of your life. Describe it in full detail.",
       "A decision that turned out way better than you expected?",
       "Something you were obsessed with at 18 that you'd never admit now?",
       "Most memorable birthday so far?",
@@ -1407,7 +1430,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
       "Cold shower person, or absolutely not?",
       "A healthy habit you've kept for more than a year?",
       "Sunrise hike or spa day?",
-      "Gym playlist: send the song that gets you through the last set."
+      "Gym playlist: name the song that gets you through the last set."
     ]},
     travel:{name:"Wanderlust", short:"Travel", desc:"Trips, beaches and window seats.", c:"#22B6C4", qs:[
       "Window or aisle? This matters.",
@@ -1427,7 +1450,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
       "You're a cat on a balcony in your city for a day. What's the plan?",
       "Your most useless talent?",
       "Which emoji do you overuse?",
-      "If your life were a Brazilian soap opera, what's this week's episode called?",
+      "If your life were a soap opera, what's this week's episode called?",
       "A hill you'd die on that nobody else cares about?",
       "The weirdest food combination you secretly love?",
       "One cuisine for the rest of your life. Go.",
@@ -1473,7 +1496,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
 
   // setup: null until someone fills in the trip form; then {names:{M,S}, cities, routes, startId, endId}.
   // laid[routeId] = ["M","S",...] — who laid each car on that route, in order.
-  const fresh = () => ({v:3, setup:null, laid:{}, turn:"M", used:{}, draw:null, last:""});
+  const fresh = () => ({v:3, setup:null, laid:{}, turn:"M", used:{}, draw:null, pend:{}, log:[], mode:"classic", last:""});
 
   // a saved trip whose routes are missing their length / car count (an older
   // or different version wrote it) would otherwise turn into NaN everywhere.
@@ -1492,17 +1515,70 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
 
   function normalize(st){
     if (!st || typeof st !== "object") return fresh();
-    const out = {v:3, setup: fixRoutes(st.setup) || null, laid:{}, turn: st.turn==="S" ? "S" : "M", used: st.used || {}, draw: st.draw || null, last: st.last || ""};
+    const out = {v:3, setup: fixRoutes(st.setup) || null, laid:{}, turn: st.turn==="S" ? "S" : "M", used: st.used || {}, draw: st.draw || null, pend: {}, log: Array.isArray(st.log) ? st.log : [], mode: st.mode==="reveal" ? "reveal" : "classic", last: st.last || ""};
     if (out.setup && st.laid){
       const rb = Object.fromEntries((out.setup.routes||[]).map(r=>[r.id,r]));
       for (const id in st.laid) if (rb[id]) out.laid[id] = st.laid[id].slice(0, rb[id].cars);
       if (out.draw && (!rb[out.draw.route] || (out.laid[out.draw.route]||[]).length >= rb[out.draw.route].cars)) out.draw = null;
-      else if (out.draw && out.draw.status !== "rating") out.draw.status = "open";
+      // ratings still owed: {answererId: {route, qs}}; the other player rates them
+      for (const p of ["M","S"]){ const o = st.pend && st.pend[p]; if (o && rb[o.route] && Array.isArray(o.qs)) out.pend[p] = {route:o.route, qs:o.qs}; }
+      // older saves froze the game on the rater; turn that into a deferred rating
+      if (out.draw && out.draw.status === "rating"){
+        out.pend[out.draw.for] = {route:out.draw.route, qs:out.draw.qs}; out.turn = out.draw.for; out.draw = null;
+      } else if (out.draw) out.draw.status = "open";
+      if (out.draw && out.mode === "reveal"){ out.draw.ans = out.draw.ans || {M:null,S:null}; out.draw.rate = out.draw.rate || {M:null,S:null}; }
     } else {
       out.laid = {}; out.draw = null;
     }
     return out;
   }
+
+  // ---------- private answers: encrypted in the browser, the key lives only in your invite link (#k=…) ----------
+  const b64 = u8 => btoa(String.fromCharCode(...u8)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  const unb64 = s => Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")), c=>c.charCodeAt(0));
+  const KEYSLOT = "line-key-" + ROOM;
+  let KEY = null;
+  function readKeyText(){
+    const m = /[#&]k=([\w-]{20,})/.exec(location.hash);
+    if (m){ try{ localStorage.setItem(KEYSLOT, m[1]); }catch(e){} return m[1]; }
+    try{ return localStorage.getItem(KEYSLOT) || ""; }catch(e){ return ""; }
+  }
+  async function loadKey(txt){
+    try{ KEY = await crypto.subtle.importKey("raw", unb64(txt), "AES-GCM", false, ["encrypt","decrypt"]); }catch(e){ KEY = null; }
+  }
+  async function ensureKey(create){
+    let txt = readKeyText();
+    if (!txt && create){
+      txt = b64(crypto.getRandomValues(new Uint8Array(32)));
+      try{ localStorage.setItem(KEYSLOT, txt); }catch(e){}
+      history.replaceState(null, "", location.pathname + location.search + "#k=" + txt);
+      const iu = document.getElementById("inviteUrl"); if (iu) iu.value = location.href;
+    }
+    if (txt) await loadKey(txt);
+  }
+  async function encTexts(arr){
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv}, KEY, new TextEncoder().encode(JSON.stringify(arr))));
+    return b64(iv) + "." + b64(ct);
+  }
+  const plainCache = {};   // ciphertext -> array of texts, or false if this device can't read it
+  function getPlain(c){
+    if (!c) return null;
+    if (c in plainCache) return plainCache[c];
+    plainCache[c] = null;
+    (async()=>{
+      try{
+        if (!KEY) await keyReady;
+        if (!KEY) throw 0;
+        const [iv, ct] = c.split(".");
+        const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:unb64(iv)}, KEY, unb64(ct));
+        plainCache[c] = JSON.parse(new TextDecoder().decode(pt));
+      }catch(e){ plainCache[c] = false; }
+      render();
+    })();
+    return null;
+  }
+  const keyReady = ensureKey(false).then(()=>{ render(); });
 
   let S = fresh();
   let rev = 0;
@@ -1510,6 +1586,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
   let pending = 0;          // pushes queued or in flight
   let dirty = false;        // a push failed and needs retrying
   let queue = Promise.resolve();
+  let redo = [];            // reveal-mode actions not yet saved; re-applied if both phones save at once
   let proxy = false;        // drawer is answering on the other person's behalf (local only)
   let loaded = false;
 
@@ -1541,8 +1618,9 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
     if (!result.ok){ errBox.textContent = result.reason; errBox.hidden = false; return; }
     errBox.hidden = true;
     S.setup = { names:{M:n1||"Player 1", S:n2||"Player 2"}, cities:result.cities, routes:result.routes, startId:result.startId, endId:result.endId, depth };
-    S.turn = "M"; S.laid = {}; S.draw = null; S.last = "";
-    commit();
+    S.turn = "M"; S.laid = {}; S.draw = null; S.pend = {}; S.log = []; S.last = "";
+    S.mode = (document.querySelector('input[name="mode"]:checked')||{}).value === "classic" ? "classic" : "reveal";
+    if (S.mode === "reveal") ensureKey(true).then(commit); else commit();
   });
 
   function setStatus(kind, text){
@@ -1586,13 +1664,14 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
         const data = await res.json();
         pending = Math.max(0, pending-1);
         applyRemote(data, true);
+        if (!seed && redo.length){ redo.forEach(fn=>fn()); commit(); setStatus("online","Saved"); return; }
         setStatus("online", seed ? "Synced" : "The other phone moved at the same time — board updated");
         return;
       }
       if(!res.ok) throw new Error("status "+res.status);
       const data = await res.json();
       rev = data.rev;
-      dirty = false;
+      dirty = false; redo = [];
       setStatus("online","Saved");
     }catch(e){
       dirty = true;
@@ -1674,13 +1753,15 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
   }
   function openRoutes(){ return ROUTES.filter(r=>!isComplete(r.id)); }
   const drawerOf = d => other(d.for);
-  const iDraw = () => !S.draw && ME === S.turn;
+  const owes = () => !!ME && !!S.pend[other(ME)];      // I still have to rate the other player's answers
+  const iDraw = () => !S.draw && ME === S.turn && !owes();
   const iAmDrawer = () => !!S.draw && ME === drawerOf(S.draw);
   const iAmAnswerer = () => !!S.draw && ME === S.draw.for;
 
   function startDraw(routeId){
     const r = RB[routeId];
     S.draw = {route:routeId, qs:pickQs(r.t), for:other(S.turn), status:"open"};
+    if (S.mode === "reveal") Object.assign(S.draw, {id:Math.random().toString(36).slice(2,9), by:S.turn, ans:{M:null,S:null}, rate:{M:null,S:null}});
     proxy = false; commit();
   }
   // Cities already joined (by complete routes) to either end of the line.
@@ -1710,7 +1791,8 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
       if (ME !== S.turn){ flash(`It's ${PLAYERS[S.turn].name}'s turn to draw a card for you.`); return; }
       startDraw(id);
     } else {
-      if (!iAmDrawer() || S.draw.status !== "open"){ flash(`A card is already in play.`); return; }
+      const swappable = S.mode === "reveal" ? (ME === S.draw.by && !S.draw.ans.M && !S.draw.ans.S) : (iAmDrawer() && S.draw.status === "open");
+      if (!swappable){ flash(`A card is already in play.`); return; }
       if (S.draw.route === id) return;
       startDraw(id);
     }
@@ -1723,21 +1805,49 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
     {label:"Good answer",    emoji:"🙂", cars:2},
     {label:"Wow.",           emoji:"🔥", cars:3}
   ];
-  function lay(n, how){
-    const d = S.draw; if (!d) return;
-    const r = RB[d.route], p = d.for;
+  function lay(n, how, pendFor){
+    const d = pendFor ? S.pend[pendFor] : S.draw; if (!d) return;
+    const r = RB[d.route], p = pendFor || d.for;
     const arr = (S.laid[r.id] || []).slice();
     const room = r.cars - arr.length, k = Math.max(0, Math.min(n, room));
     for (let i=0;i<k;i++) arr.push(p);
     S.laid[r.id] = arr;
     const done = arr.length >= r.cars;
     S.last = `${PLAYERS[p].name} ${how} · ${k===0 ? "no cars this time" : `laid ${k} car${k===1?"":"s"}`} on ${routeName(r)}${done ? " — route complete" : ""}`;
-    S.turn = p;           // whoever answered draws next
-    S.draw = null; proxy = false; commit();
+    if (pendFor){ delete S.pend[pendFor]; }        // rating settled; the game carries on wherever it was
+    else { S.turn = p; S.draw = null; }             // whoever answered draws next, right away
+    proxy = false; commit();
   }
+  // ----- reveal mode: both answer the same card, answers stay hidden until both are in -----
+  function act(fn){ fn(); redo.push(fn); commit(); }
+  function resolveReveal(){
+    const d = S.draw; if (!d || !d.ans.M || !d.ans.S || d.rate.M == null || d.rate.S == null) return;
+    const r = RB[d.route];
+    const want = {M: RATINGS[d.rate.S].cars, S: RATINGS[d.rate.M].cars};   // cars I earn = what the other rated me
+    const order = want.M === want.S ? [other(d.by), d.by] : (want.M > want.S ? ["M","S"] : ["S","M"]);
+    const got = {M:0,S:0}, arr = (S.laid[r.id] || []).slice();
+    let progressed = true;
+    while (arr.length < r.cars && progressed){            // hand out cars one at a time so a short route splits fairly
+      progressed = false;
+      for (const p of order){ if (arr.length < r.cars && got[p] < want[p]){ arr.push(p); got[p]++; progressed = true; } }
+    }
+    S.laid[r.id] = arr;
+    S.log.push({route:r.id, qs:d.qs, by:d.by, ans:d.ans, rate:d.rate, cars:got});
+    S.last = `${PLAYERS.M.name} ${RATINGS[d.rate.S].emoji} ${got.M} · ${PLAYERS.S.name} ${RATINGS[d.rate.M].emoji} ${got.S} on ${routeName(r)}${arr.length>=r.cars ? " — route complete" : ""}`;
+    S.turn = other(d.by); S.draw = null; proxy = false;
+  }
+  function submitAnswer(id, me, texts){ act(()=>{ if (!S.draw || S.draw.id !== id || S.draw.ans[me]) return; S.draw.ans[me] = texts; resolveReveal(); }); }
+  function submitRating(id, me, i){ act(()=>{ if (!S.draw || S.draw.id !== id || S.draw.rate[me] != null) return; S.draw.rate[me] = i; resolveReveal(); }); }
+  let draft = {id:null, a:["",""]};
+
   function answerOne(){ lay(1, "answered one question"); }
-  function answerBoth(){ if(!S.draw) return; S.draw.status = "rating"; proxy = false; commit(); }
-  function rate(i){ const rt = RATINGS[i]; lay(rt.cars, `answered both (${rt.emoji} ${rt.label})`); }
+  function answerBoth(){
+    const d = S.draw; if(!d) return;
+    S.pend[d.for] = {route:d.route, qs:d.qs};      // rated later by the other player, before they draw
+    S.last = `${PLAYERS[d.for].name} answered both · ${PLAYERS[other(d.for)].name} rates it before their next draw`;
+    S.turn = d.for; S.draw = null; proxy = false; commit();
+  }
+  function rate(i){ const rt = RATINGS[i]; const a = other(ME); lay(rt.cars, `answered both (${rt.emoji} ${rt.label})`, a); }
 
   function cars(p){ let s=0; for (const id in S.laid) for (const o of S.laid[id]) if (o===p) s++; return s; }
   function winPath(){
@@ -1774,10 +1884,13 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
       <button type="button" class="primary" style="background:var(--p2);border-color:var(--p2)" data-me="S">I'm ${esc(PLAYERS.S.name)}</button>`;
     document.querySelectorAll("#idbtns [data-me]").forEach(b=>{ b.onclick=()=>setMe(b.dataset.me); });
 
+    document.getElementById("rulesReveal").hidden = S.mode !== "reveal";
+    document.getElementById("rulesClassic").hidden = S.mode === "reveal";
     document.getElementById("idpick").hidden = !!ME;
     document.getElementById("whoamiBtn").textContent = ME ? `Playing as ${PLAYERS[ME].name} · switch` : "";
     const path = winPath();
-    const myMove = !path && (iDraw() || (iAmAnswerer() && S.draw.status==="open") || (iAmDrawer() && S.draw.status==="rating"));
+    const revealMove = S.mode==="reveal" && !path && (S.draw ? (!S.draw.ans[ME] || (S.draw.ans.M && S.draw.ans.S && S.draw.rate[ME]==null)) : S.turn===ME);
+    const myMove = revealMove || owes() || S.mode!=="reveal" && !path && (iDraw() || iAmAnswerer() || owes());
     document.title = (myMove ? "● Your move · " : "") + "Drawn Closer";
 
     document.getElementById("players").innerHTML = ["M","S"].map(p=>{
@@ -1811,8 +1924,27 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
         <span><b>${th.name}</b><small>${th.desc}</small></span><span class="left">${left}/${all.length} open</span></div>`;
     }).join("");
 
+    renderHistory();
     const P = document.getElementById("panel");
-    const lastLine = S.last ? `<p class="lastmove"><span>Last move</span>${esc(S.last)}</p>` : "";
+    let lastLine = S.last ? `<p class="lastmove"><span>Last move</span>${esc(S.last)}</p>` : "";
+    // ratings I owe / that are waiting on the other player
+    const pendMine = ME && S.pend[other(ME)], pendTheirs = ME && S.pend[ME];
+    let rateBlock = "";
+    if (pendMine){
+      const pr=RB[pendMine.route], pth=THEMES[pr.t], who=PLAYERS[other(ME)].name;
+      rateBlock = `<div class="ratebox"><div class="eyebrow">${esc(who)} answered both · ${esc(routeName(pr))}</div>
+        ${pendMine.qs.map(qi=>`<p class="q" style="margin:.25rem 0">• ${esc(pth.qs[qi])}</p>`).join("")}
+        <p class="sub"><b style="color:var(--ink)">How good were ${esc(who)}'s answers?</b> ${S.draw||S.turn!==ME ? "Rate whenever you like" : "Rate to unlock your draw"}.</p>
+        <div class="actions">${RATINGS.map((rt,i)=>`<button type="button" class="rate" data-i="${i}">${rt.emoji} ${esc(rt.label)}<small>${rt.cars} car${rt.cars===1?"":"s"}</small></button>`).join("")}</div></div>`;
+    } else if (pendTheirs){
+      rateBlock = `<p class="lastmove"><span>Waiting</span>${esc(PLAYERS[other(ME)].name)} will rate your last answers before their next draw. Keep going.</p>`;
+    }
+    const bindRates = () => document.querySelectorAll(".rate").forEach(b=>{ b.onclick=()=>rate(+b.dataset.i); });
+    if (path && (pendMine || pendTheirs)){
+      P.className="panel";
+      P.innerHTML = `${lastLine}<div class="eyebrow">Line complete · one rating left</div>${rateBlock}`;
+      bindRates(); return;
+    }
     if (path){
       const m=cars("M"), s=cars("S");
       const winner = m===s ? null : (m>s?"M":"S");
@@ -1822,7 +1954,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
         <p class="sub" style="color:var(--ink)">${label("M")} laid <b>${m}</b> cars and ${label("S")} laid <b>${s}</b>. ${winner ? `<b>${label(winner)}</b> ${verb(winner,"pick","picks")} the first date spot.` : `It's a tie, so you plan the first date together.`}</p>
         <p class="sub">The map has done its job. Next step is a real ticket.</p>
         <div class="actions"><button type="button" class="ghost" id="again">Play another round</button></div>`;
-      document.getElementById("again").onclick = ()=>{ const setup=S.setup; S=fresh(); S.setup=setup; commit(); };
+      document.getElementById("again").onclick = ()=>{ const setup=S.setup, mode=S.mode; S=fresh(); S.setup=setup; S.mode=mode; commit(); };
       return;
     }
     P.className="panel";
@@ -1832,9 +1964,11 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
       const drawer=S.turn, target=other(S.turn);
       const nothingLaid = cars("M")+cars("S")===0;
       const swap = nothingLaid ? `<button type="button" class="link" id="swapBtn">${drawer===ME ? `Let ${PLAYERS[target].name} draw first` : `I'll draw first`}</button>` : "";
-      if (drawer === ME){
+      if (drawer === ME && owes()){
+        P.innerHTML = `${lastLine}${rateBlock}<p class="sub">Then you can draw your next card.</p><p class="toast" id="toast">${esc(flashMsg)}</p>`;
+      } else if (drawer === ME){
         const cols = Object.values(THEMES).map(t=>`<span style="--c:${t.c}"></span>`).join("");
-        P.innerHTML = `${lastLine}<div class="eyebrow">Your turn</div>
+        P.innerHTML = `${lastLine}${rateBlock}<div class="eyebrow">Your turn</div>
           <h2>Draw a card for ${PLAYERS[target].name}</h2>
           <div class="empty"><div class="deck" aria-hidden="true">${cols}</div>
           <p class="sub">A random open route is picked, with two questions from its colour. Or tap a route on the map to choose it yourself.</p>
@@ -1843,14 +1977,65 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
           <p class="toast" id="toast">${esc(flashMsg)}</p></div>`;
         document.getElementById("drawBtn").onclick = drawRandom;
       } else {
-        P.innerHTML = `${lastLine}<div class="eyebrow">${PLAYERS[drawer].name}'s turn</div>
+        P.innerHTML = `${lastLine}${rateBlock}<div class="eyebrow">${PLAYERS[drawer].name}'s turn</div>
           <h2>${PLAYERS[drawer].name} is picking a card for you</h2>
           <p class="sub waiting"><span class="pulse" aria-hidden="true"></span>Your questions will appear here as soon as ${PLAYERS[drawer].name} draws.</p>
           ${swap}
           <p class="toast" id="toast">${esc(flashMsg)}</p>`;
       }
+      bindRates();
       const sb = document.getElementById("swapBtn");
       if (sb) sb.onclick = ()=>{ S.turn=other(S.turn); commit(); };
+      return;
+    }
+
+    // --- a card is in play (reveal mode) ---
+    if (S.mode === "reveal"){
+      const d=S.draw, r=RB[d.route], th=THEMES[r.t], oth=other(ME), have=laidOn(r.id);
+      const head = `<div class="route-head"><h2>${esc(routeName(r))}</h2>
+        <span class="chip" style="--c:${th.c}"><i></i>${th.name} · ${have}/${r.cars} laid</span></div>`;
+      const qHtml = (withAns) => `<div class="tickets">${d.qs.map((qi,n)=>`
+        <div class="ticket" style="--c:${th.c}"><div class="stub"><span>${th.short}</span></div>
+          <div class="tbody"><div class="tmeta">Question ${n+1} of 2</div><p class="q">${esc(th.qs[qi])}</p>
+          ${withAns ? ["M","S"].map(p=>{ const A = getPlain(d.ans[p]); return `<p class="sub" style="margin:.35rem 0 0"><b style="color:var(--ink)">${esc(label(p))}:</b> ${A ? (A[n] ? esc(A[n]) : "<i>skipped</i>") : A===false ? "🔒 can't be read on this device. Open the full invite link." : "…"}</p>`; }).join("") : ""}
+          </div></div>`).join("")}</div>`;
+      let body = "";
+      const both = d.ans.M && d.ans.S;
+      if (!both){
+        if (!d.ans[ME] && !KEY){
+          body = `<div class="eyebrow">One thing first</div>${head}${qHtml(false)}
+            <p class="sub">Answers are encrypted, and the key is inside the full invite link (the part after <b>#k=</b>). Open the link ${esc(PLAYERS[other(ME)].name)} sent in full on this phone, then come back.</p>`;
+        } else if (!d.ans[ME]){
+          if (draft.id !== d.id) draft = {id:d.id, a:["",""]};
+          const wait = d.ans[oth] ? `<p class="sub">${esc(PLAYERS[oth].name)} has already answered. Nothing is shown until you have too.</p>` : `<p class="sub">You both answer these. Answers stay hidden until both of you are in.</p>`;
+          body = `<div class="eyebrow">Your turn to open up</div>${head}${qHtml(false)}${wait}
+            ${d.qs.map((qi,n)=>`<textarea class="ansbox" data-n="${n}" rows="3" maxlength="600" placeholder="Answer ${n+1} (optional, but write at least one)"></textarea>`).join("")}
+            <div class="actions"><button type="button" class="primary" id="lockBtn">Lock in my answer</button></div>
+            ${!d.ans.M && !d.ans.S && ME===d.by ? `<div class="actions"><button type="button" class="link" id="otherBtn">Different route</button><button type="button" class="link" id="newBtn">New questions</button><button type="button" class="link" id="cancelBtn">Put the card back</button></div>` : ""}`;
+        } else {
+          body = `<div class="eyebrow">Locked in ✓</div>${head}${qHtml(false)}
+            <p class="sub waiting"><span class="pulse" aria-hidden="true"></span>Waiting for ${esc(PLAYERS[oth].name)} to answer. Yours will be revealed together.</p>`;
+        }
+      } else if (d.rate[ME] == null){
+        body = `<div class="eyebrow">Showdown</div>${head}${qHtml(true)}
+          <p class="sub"><b style="color:var(--ink)">How open, honest or fun were ${esc(PLAYERS[oth].name)}'s answers?</b> This sets the cars they lay.</p>
+          <div class="actions">${RATINGS.map((rt,i)=>`<button type="button" class="rate" data-i="${i}">${rt.emoji} ${esc(rt.label)}<small>${rt.cars} car${rt.cars===1?"":"s"}</small></button>`).join("")}</div>`;
+      } else {
+        body = `<div class="eyebrow">Showdown</div>${head}${qHtml(true)}
+          <p class="sub waiting"><span class="pulse" aria-hidden="true"></span>Waiting for ${esc(PLAYERS[oth].name)} to rate your answers…</p>`;
+      }
+      P.innerHTML = `${lastLine}${body}<p class="toast" id="toast">${esc(flashMsg)}</p>`;
+      const on2 = (id, fn) => { const b=document.getElementById(id); if (b) b.onclick = fn; };
+      P.querySelectorAll(".ansbox").forEach(a=>{ a.value = draft.a[+a.dataset.n]; a.oninput = ()=>{ draft.a[+a.dataset.n] = a.value; }; });
+      on2("lockBtn", ()=>{
+        const texts = draft.a.map(s=>s.trim());
+        if (!texts.some(Boolean)){ flash("Write at least one answer first."); return; }
+        encTexts(texts).then(c=>submitAnswer(d.id, ME, c), ()=>flash("Couldn't encrypt on this device."));
+      });
+      P.querySelectorAll(".rate").forEach(b=>{ b.onclick=()=>submitRating(d.id, ME, +b.dataset.i); });
+      on2("newBtn", ()=>{ S.draw.qs = pickQs(r.t); commit(); });
+      on2("otherBtn", drawRandom);
+      on2("cancelBtn", ()=>{ S.draw=null; commit(); });
       return;
     }
 
@@ -1863,30 +2048,21 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
           <p class="q">${esc(th.qs[qi])}</p></div></div>`).join("")}</div>`;
     const head = `<div class="route-head"><h2>${esc(routeName(r))}</h2>
         <span class="chip" style="--c:${th.c}"><i></i>${th.name} · ${have}/${r.cars} laid</span></div>`;
-    const payout = `<p class="payout">Answer one → <b>1 car</b>. Answer both → ${PLAYERS[drawerP].name} rates it: <b>0, 2 or 3 cars</b>.${room<3?` <span>(Only ${room} left on this route.)</span>`:""}</p>`;
+    const payout = `<p class="payout">Answer one → <b>1 car</b>. Answer both → ${PLAYERS[drawerP].name} rates it: <b>1, 2 or 3 cars</b>, whenever they get to it.${room<3?` <span>(Only ${room} left on this route.)</span>`:""}</p>`;
     let body = "";
 
-    if (d.status === "rating"){
-      if (ME === drawerP){
-        body = `<div class="eyebrow">${PLAYERS[answerer].name} went for both</div>${head}${tickets}
-          <p class="sub"><b style="color:var(--ink)">How good were ${PLAYERS[answerer].name}'s answers?</b> Be honest — it decides the cars.</p>
-          <div class="actions">${RATINGS.map((rt,i)=>`<button type="button" class="rate" data-i="${i}">${rt.emoji} ${esc(rt.label)}<small>${rt.cars} car${rt.cars===1?"":"s"}</small></button>`).join("")}</div>`;
-      } else {
-        body = `<div class="eyebrow">You went for both</div>${head}${tickets}
-          <p class="sub waiting"><span class="pulse" aria-hidden="true"></span>${PLAYERS[drawerP].name} is rating your answers now…</p>`;
-      }
-    } else if (ME === answerer){
+    if (ME === answerer){
       body = `<div class="eyebrow">Your card · drawn by ${PLAYERS[drawerP].name}</div>${head}${tickets}${payout}
         <p class="sub">Answer in your chat, then tell the game what you did:</p>
         <div class="actions">
           <button type="button" id="oneBtn">I answered one<small>+1 car, safe</small></button>
-          <button type="button" class="primary" id="bothBtn">I answered both<small>${PLAYERS[drawerP].name} rates it</small></button>
+          <button type="button" class="primary" id="bothBtn">I answered both<small>${PLAYERS[drawerP].name} rates it later</small></button>
         </div>`;
     } else {
       const proxyBlock = proxy
         ? `<div class="actions">
              <button type="button" id="oneBtn">${PLAYERS[answerer].name} answered one<small>+1 car, safe</small></button>
-             <button type="button" class="primary" id="bothBtn">Answered both<small>you rate it</small></button>
+             <button type="button" class="primary" id="bothBtn">Answered both<small>you rate it next</small></button>
            </div>`
         : `<p class="sub waiting"><span class="pulse" aria-hidden="true"></span>Waiting for ${PLAYERS[answerer].name} to answer and tap one or both.</p>
            <button type="button" class="link" id="proxyBtn">${PLAYERS[answerer].name} not in the app? Mark it yourself</button>`;
@@ -1900,7 +2076,7 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
         </div>
         <textarea class="copybox" id="copybox" readonly hidden aria-label="Card text to copy"></textarea>`;
     }
-    P.innerHTML = `${lastLine}${body}<p class="toast" id="toast">${esc(flashMsg)}</p>`;
+    P.innerHTML = `${lastLine}${rateBlock}${body}<p class="toast" id="toast">${esc(flashMsg)}</p>`;
 
     const on = (id, fn) => { const b=document.getElementById(id); if (b) b.onclick = fn; };
     on("copyBtn", ()=>{
@@ -1918,11 +2094,46 @@ function buildRoute(startQuery, endQuery, db, extraQueries, depth){
     on("cancelBtn", ()=>{ S.draw=null; proxy=false; commit(); });
   }
 
+  // ---------- answer history (decrypted only on this device) ----------
+  function historyText(){
+    const lines = [`Drawn Closer — ${S.setup.names.M} & ${S.setup.names.S}`, ""];
+    for (const e of S.log){
+      const r = RB[e.route], th = r && THEMES[r.t]; if (!r) continue;
+      lines.push(`${routeName(r)} · ${th.name}`);
+      const A = {M:getPlain(e.ans.M), S:getPlain(e.ans.S)};
+      e.qs.forEach((qi,n)=>{
+        lines.push(`  ${th.qs[qi]}`);
+        ["M","S"].forEach(p=>lines.push(`    ${PLAYERS[p].name}: ${A[p] ? (A[p][n]||"(skipped)") : "(can't be read on this device)"}`));
+      });
+      lines.push("");
+    }
+    return lines.join("\n");
+  }
+  function renderHistory(){
+    const box = document.getElementById("historyBox");
+    const show = !!S.setup && S.mode==="reveal" && S.log.length>0;
+    box.hidden = !show; if (!show) return;
+    document.getElementById("historyList").innerHTML = S.log.slice().reverse().map(e=>{
+      const r=RB[e.route]; if(!r) return "";
+      const th=THEMES[r.t], A={M:getPlain(e.ans.M), S:getPlain(e.ans.S)};
+      return `<div class="ratebox"><div class="eyebrow">${esc(routeName(r))} · ${th.name}</div>${e.qs.map((qi,n)=>`<p class="q" style="margin:.25rem 0">${esc(th.qs[qi])}</p>${["M","S"].map(p=>`<p class="sub" style="margin:0 0 .25rem"><b style="color:var(--ink)">${esc(PLAYERS[p].name)}:</b> ${A[p] ? esc(A[p][n]||"skipped") : A[p]===false ? "🔒" : "…"}</p>`).join("")}`).join("")}</div>`;
+    }).join("");
+  }
+  document.getElementById("dlBtn").onclick = ()=>{
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([historyText()],{type:"text/plain"}));
+    a.download="our-answers.txt"; document.body.appendChild(a); a.click(); a.remove();
+  };
+  let wipeArmed=false; const wipeBtn=document.getElementById("wipeBtn");
+  wipeBtn.onclick = ()=>{
+    if(!wipeArmed){ wipeArmed=true; wipeBtn.textContent="Tap again to delete for both of you"; setTimeout(()=>{wipeArmed=false; wipeBtn.textContent="Delete saved answers";},3500); return; }
+    wipeArmed=false; wipeBtn.textContent="Delete saved answers"; S.log=[]; commit();
+  };
+
   // reset with confirm
   const resetBtn=document.getElementById("reset"); let armed=false;
   resetBtn.onclick=()=>{
     if(!armed){ armed=true; resetBtn.textContent="Tap again to clear this game"; setTimeout(()=>{armed=false; resetBtn.textContent="Start a new game";},3000); return; }
-    armed=false; resetBtn.textContent="Start a new game"; { const setup=S.setup; S=fresh(); S.setup=setup; } commit();
+    armed=false; resetBtn.textContent="Start a new game"; { const setup=S.setup, mode=S.mode; S=fresh(); S.setup=setup; S.mode=mode; } commit();
   };
 
   // invite link
