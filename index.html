@@ -194,6 +194,14 @@
   .pair label{min-width:0}
   .pair input{width:100%;min-width:0}
   @media (max-width:340px){.pair{grid-template-columns:minmax(0,1fr)}}
+  .depthpick{border:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+  .depthpick legend{padding:0;font-size:12.5px;color:var(--muted);font-weight:600}
+  .depthopts{display:flex;gap:6px;background:rgba(26,4,12,.4);border:1px solid var(--line);border-radius:10px;padding:4px}
+  .depthopt{flex:1;position:relative;display:flex;align-items:center;justify-content:center;text-align:center;padding:9px 4px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;line-height:1.25}
+  .depthopt input{position:absolute;opacity:0;pointer-events:none}
+  .depthopt input:checked ~ span{color:#2B0714}
+  .depthopt:has(input:checked){background:var(--cream)}
+  .depthopt input:focus-visible ~ span{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
   /* the 1060-wide map is scaled to ~1/3 on a phone — enlarge labels so they stay legible */
   @media (max-width:600px){
     .city-label{font-size:20px;stroke-width:5px}
@@ -235,6 +243,14 @@
         <fieldset class="pair p2"><legend>Them</legend>
           <label>Name<input type="text" id="setupName2" maxlength="24" required placeholder="Sam" autocomplete="off"></label>
           <label>City<input type="text" id="setupCity2" maxlength="60" required placeholder="Lisbon" autocomplete="off"></label>
+        </fieldset>
+        <fieldset class="depthpick">
+          <legend>How deep do you want to go?</legend>
+          <div class="depthopts" id="depthOpts" role="radiogroup" aria-label="How deep do you want to go?">
+            <label class="depthopt"><input type="radio" name="depth" value="light" autocomplete="off"><span>Light &amp; playful</span></label>
+            <label class="depthopt"><input type="radio" name="depth" value="balanced" checked autocomplete="off"><span>Balanced</span></label>
+            <label class="depthopt"><input type="radio" name="depth" value="deep" autocomplete="off"><span>Deep &amp; vulnerable</span></label>
+          </div>
         </fieldset>
         <details class="setupExtra">
           <summary>Add stops along the way</summary>
@@ -800,6 +816,10 @@ const CITY_DB = [
 
 const THEME_KEYS = ["flirty","love","rewind","future","career","health","travel","silly"];
 
+// How intimate each card category reads — used to weight which cards show up
+// more when the couple picks how deep they want to go.
+const THEME_DEPTH = { silly:1, travel:1, health:1, flirty:2, career:2, rewind:3, love:4, future:4 };
+
 // Big, famous, or genuinely fun-to-see cities — preferred as waypoints over an
 // obscure-but-closer-to-the-line city, so a trip reads like a highlight reel
 // instead of a random string of secondary towns.
@@ -868,7 +888,7 @@ function seededRng(seed){
   return function(){ h += 0x6D2B79F5; let t = Math.imul(h ^ (h>>>15), 1 | h); t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t; return ((t ^ (t>>>14)) >>> 0) / 4294967296; };
 }
 
-function buildRoute(startQuery, endQuery, db, extraQueries){
+function buildRoute(startQuery, endQuery, db, extraQueries, depth){
   const a = findCity(startQuery, db), b = findCity(endQuery, db);
   if (!a.ok) return {ok:false, reason:a.reason};
   if (!b.ok) return {ok:false, reason:b.reason};
@@ -942,11 +962,14 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
     return out;
   };
 
-  // at most 9 stops between the two ends — enough for a rich board, few
-  // enough to stay readable on a phone.
+  // At least enough stops to comfortably reach a 20-route board with only
+  // short, local connections (see edge-building below) — a longer trip gets
+  // more stops so the extra routes come from a dense little cluster of
+  // nearby cities, not a handful of far-flung diagonals. Capped at 13 so a
+  // very long haul still stays readable on a phone.
   // tagged cities occupy the stretch of the trip they fall in, so the auto
   // picks fill in around them instead of doubling up.
-  const target = Math.max(0, Math.min(9, Math.round(totalDist / 1.8)));
+  const target = Math.max(0, Math.min(13, Math.round(totalDist / 1.4)));
   const filled = new Array(target).fill(false);
   picks.forEach(p => { const b = Math.min(target-1, Math.floor(p.t*target)); if (b >= 0) filled[b] = true; });
 
@@ -986,31 +1009,6 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
   nodes.forEach((n,i)=>{ CITIES[ids[i]] = {n:n.n.replace(/\s*\([^)]*\)\s*$/,""), lon: i>0 && i<nodes.length ? unwrap(n.lon) : n.lon, lat:n.lat, end: i===0 || i===ids.length-1}; });
   // re-unwrap start/end too, for a consistent coordinate space
   CITIES[startId].lon = sLon; CITIES[endId].lon = eLon;
-
-  // ---------- edges: a clean chain (nodes are already ordered along the
-  // start→end line), plus the occasional skip-one shortcut for route choice —
-  // but only between nodes that are actually near each other in real terms,
-  // so a forced/tagged city that's far off the corridor doesn't spawn a long
-  // diagonal line raking across the whole map. ----------
-  const edgeKey = (x,y)=> x<y ? x+"|"+y : y+"|"+x;
-  const edgeSet = new Map(); // key -> [idA,idB]
-  const addEdge = (i,j) => { if (i<0||j>=ids.length||i===j) return; const k=edgeKey(ids[i],ids[j]); if(!edgeSet.has(k)) edgeSet.set(k,[ids[i],ids[j]]); };
-  const deg = (i,j) => { const A=CITIES[ids[i]], B=CITIES[ids[j]]; return Math.hypot(A.lon-B.lon, A.lat-B.lat); };
-
-  for (let i=0;i<ids.length-1;i++) addEdge(i,i+1);
-
-  // average length of the main chain, in degrees — the yardstick for whether
-  // a shortcut edge is "nearby" or a distracting long jump.
-  let chainTotal = 0;
-  for (let i=0;i<ids.length-1;i++) chainTotal += deg(i,i+1);
-  const avgChain = ids.length > 1 ? chainTotal/(ids.length-1) : 1;
-
-  for (let i=0;i<ids.length-2;i++){
-    if (rng() < 0.55 && deg(i,i+2) <= avgChain * 2.2) addEdge(i,i+2);
-  }
-
-  let edges = [...edgeSet.values()];
-  if (edges.length > 22) edges = edges.slice(0,22);
 
   // ---------- project to the fixed viewBox (1060x620), used for pixel
   // distances (cars/theming) exactly like the original fixed map did ----------
@@ -1055,6 +1053,53 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
   const px = (lon,lat) => [ VB_W/2 + (lon-cxLon)*sx, VB_H/2 - (lat-cyLat)*sy ];
   ids.forEach((id,i)=>{ const [x,y]=px(lay[i].lon, lay[i].lat); CITIES[id].x=x; CITIES[id].y=y; });
 
+  // ---------- edges: a clean chain (nodes are already ordered along the
+  // start→end line) plus the closest remaining pairs, measured on the actual
+  // rendered map, added until the board has at least 20 routes — a floor
+  // that keeps the board feeling rich even on a modest trip. A per-node cap
+  // stops any single city turning into a tangled hub. ----------
+  const edgeKey = (x,y)=> x<y ? x+"|"+y : y+"|"+x;
+  const edgeSet = new Map(); // key -> [idA,idB]
+  const nodeDeg = new Array(ids.length).fill(0);
+  const addEdge = (i,j) => {
+    if (i<0||j>=ids.length||i===j) return false;
+    const k = edgeKey(ids[i],ids[j]);
+    if (edgeSet.has(k)) return false;
+    edgeSet.set(k, [ids[i], ids[j]]); nodeDeg[i]++; nodeDeg[j]++; return true;
+  };
+  const pxDist = (i,j) => Math.hypot(CITIES[ids[i]].x-CITIES[ids[j]].x, CITIES[ids[i]].y-CITIES[ids[j]].y);
+
+  for (let i=0;i<ids.length-1;i++) addEdge(i,i+1);
+
+  const MIN_ROUTES = 20, MAX_DEGREE = 5;
+  // Spread the extra routes evenly along the whole line instead of piling
+  // them onto whichever stretch happens to have the most nearby cities:
+  // round-robin through each node in turn, each time adding its single
+  // closest still-available short connection, widening the search window
+  // only once a full round adds nothing. That keeps every stretch of the
+  // trip roughly equally "busy" rather than one dense knot and a bare chain.
+  for (const maxSkip of [3, 5, ids.length]){
+    let addedThisStage = true;
+    while (edgeSet.size < MIN_ROUTES && addedThisStage){
+      addedThisStage = false;
+      for (let i=0; i<ids.length && edgeSet.size < MIN_ROUTES; i++){
+        if (nodeDeg[i] >= MAX_DEGREE) continue;
+        let best = -1, bestD = Infinity;
+        for (let j=0; j<ids.length; j++){
+          if (j===i || Math.abs(j-i) < 2 || Math.abs(j-i) > maxSkip) continue;
+          if (nodeDeg[j] >= MAX_DEGREE) continue;
+          if (edgeSet.has(edgeKey(ids[i],ids[j]))) continue;
+          const d = pxDist(i,j);
+          if (d < bestD){ bestD = d; best = j; }
+        }
+        if (best >= 0 && addEdge(i,best)) addedThisStage = true;
+      }
+    }
+    if (edgeSet.size >= MIN_ROUTES) break;
+  }
+
+  const edges = [...edgeSet.values()];
+
   // ---------- label anchors: push labels outward from the centroid ----------
   const centroidX = ids.reduce((s,id)=>s+CITIES[id].x,0)/ids.length;
   const centroidY = ids.reduce((s,id)=>s+CITIES[id].y,0)/ids.length;
@@ -1086,7 +1131,18 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
   });
 
   // ---------- themes + car counts, from the projected pixel length ----------
-  const shuffledThemes = [...THEME_KEYS];
+  // "depth" (light / balanced / deep) weights which card categories come up
+  // more often — every category still appears at least once, just more or
+  // less frequently, so the couple gets a board that matches how deep they
+  // said they want to go without losing any variety entirely.
+  const DEPTH_WEIGHTS = {
+    light:    {1:4, 2:2, 3:1, 4:1},
+    balanced: {1:1, 2:1, 3:1, 4:1},
+    deep:     {1:1, 2:1, 3:2, 4:4}
+  };
+  const wmap = DEPTH_WEIGHTS[depth] || DEPTH_WEIGHTS.balanced;
+  const shuffledThemes = [];
+  THEME_KEYS.forEach(k => { const w = wmap[THEME_DEPTH[k]] || 1; for (let n=0; n<w; n++) shuffledThemes.push(k); });
   for (let i=shuffledThemes.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [shuffledThemes[i],shuffledThemes[j]]=[shuffledThemes[j],shuffledThemes[i]]; }
   const ROUTES = edges.map(([x,y],i)=>{
     const A=CITIES[x], B=CITIES[y], d=Math.hypot(B.x-A.x,B.y-A.y);
@@ -1290,11 +1346,12 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
     const c1 = document.getElementById("setupCity1").value.trim();
     const c2 = document.getElementById("setupCity2").value.trim();
     const extra = document.getElementById("setupExtraCities").value.split(",").map(s=>s.trim()).filter(Boolean);
+    const depth = (document.querySelector('input[name="depth"]:checked')||{}).value || "balanced";
     const errBox = document.getElementById("setupError");
-    const result = buildRoute(c1, c2, CITY_DB, extra);
+    const result = buildRoute(c1, c2, CITY_DB, extra, depth);
     if (!result.ok){ errBox.textContent = result.reason; errBox.hidden = false; return; }
     errBox.hidden = true;
-    S.setup = { names:{M:n1||"Player 1", S:n2||"Player 2"}, cities:result.cities, routes:result.routes, startId:result.startId, endId:result.endId };
+    S.setup = { names:{M:n1||"Player 1", S:n2||"Player 2"}, cities:result.cities, routes:result.routes, startId:result.startId, endId:result.endId, depth };
     S.turn = "M"; S.laid = {}; S.draw = null; S.last = "";
     commit();
   });
