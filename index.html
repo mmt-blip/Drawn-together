@@ -157,41 +157,92 @@
   .setupExtra summary::before{content:"+ ";color:var(--accent)}
   .setupExtra[open] summary::before{content:"− "}
   .setupExtra label{margin-top:8px}
+  .setupExtra .fine{display:block;margin-top:6px;font-size:11.5px}
+
+  /* ---- brand / luxury layer ---- */
+  body{background:
+    radial-gradient(900px 480px at 85% -10%, rgba(244,175,195,.10), transparent 60%),
+    radial-gradient(700px 420px at -10% 20%, rgba(182,162,255,.08), transparent 60%),
+    var(--bg);background-attachment:fixed}
+  .brandbar{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 18px;padding-bottom:14px;border-bottom:1px solid rgba(244,175,195,.16)}
+  .wordmark{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.22em;text-transform:uppercase;color:var(--cream)}
+  .wordmark .heart{color:var(--p2);margin-left:6px;font-size:.8em}
+  .tagline{font-family:var(--eyebrow-font);font-style:italic;font-size:clamp(17px,2.6vw,21px);color:var(--accent);letter-spacing:.01em}
+  .tripmeta{margin:10px 0 0;font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  .tripmeta:empty{display:none}
+  .tripmeta b{color:var(--accent);font-weight:500}
+  .board{box-shadow:0 30px 60px -30px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04)}
+  .panel{box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+
+  footer.invite{margin-top:14px;padding:18px;border-radius:16px;background:linear-gradient(180deg,rgba(67,23,43,.55),rgba(49,16,32,.35));border:1px solid rgba(244,175,195,.14);gap:10px}
+  .invitehead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px}
+  .invitehead .eyebrow{font-size:13px}
+  footer.invite .inviterow input{background:rgba(26,4,12,.6)}
+  .footlinks{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}
+  .footlinks button.link{font-size:12.5px;color:var(--faint)}
+  .footlinks button.link:hover{color:var(--muted)}
+
+  .setuphead{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+  .setuphead h2{font-family:var(--display)!important;font-weight:600!important;font-size:26px!important;line-height:1.15}
+  .setuphead p{font-size:13.5px}
+  .pair{border:1px solid var(--line);border-radius:12px;padding:10px 12px 12px;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;background:rgba(26,4,12,.35)}
+  .pair legend{padding:0 6px;font-family:var(--eyebrow-font);font-style:italic;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+  .pair.p1{border-color:rgba(182,162,255,.35)} .pair.p1 legend{color:var(--p1)}
+  .pair.p2{border-color:rgba(255,111,160,.35)} .pair.p2 legend{color:var(--p2)}
+  .pairlink{text-align:center;color:var(--accent);margin:-8px 0;font-size:14px;opacity:.8}
+  .pair{min-width:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .pair label{min-width:0}
+  .pair input{width:100%;min-width:0}
+  @media (max-width:340px){.pair{grid-template-columns:minmax(0,1fr)}}
+  /* the 1060-wide map is scaled to ~1/3 on a phone — enlarge labels so they stay legible */
+  @media (max-width:600px){
+    .city-label{font-size:20px;stroke-width:5px}
+    .city-label.end{font-size:22px}
+  }
 </style>
 </head>
 <body>
 
 <div class="wrap">
+  <div class="brandbar">
+    <span class="wordmark">Drawn Closer<span class="heart">♥</span></span>
+    <span class="tagline">Closing the distance, one question at a time.</span>
+  </div>
+
   <header>
     <div>
-      <div class="eyebrow" id="eyebrowTop">Destination ticket · 2 players</div>
-      <h1 id="heroTitle">Drawn Closer<span class="heart">♥</span></h1>
-      <p class="lede">Take turns drawing a card for each other. Every card has <b>two questions</b>. Answer one and you lay a car, safely. Answer both and the other person rates it — could be three cars, could be none. Connect the two cities, and <b>whoever laid the most cars picks the first date spot.</b></p>
+      <div class="eyebrow" id="eyebrowTop">A game for two</div>
+      <h1 id="heroTitle">Two cities, one line</h1>
+      <p class="tripmeta" id="tripMeta"></p>
+      <p class="lede">Whoever lays the most cars picks the first date.</p>
     </div>
     <div class="players" id="players"></div>
   </header>
 
-  <div class="invite">
-    <p class="hint" id="inviteHint">Send this link once. After that, whatever either of you does shows up on both phones within a few seconds — no codes to paste.</p>
-    <div class="inviterow"><input readonly id="inviteUrl" onclick="this.select()"><button type="button" id="inviteCopy">Copy link</button></div>
-    <p class="statusline" id="statusline"><span class="dot" id="statusdot"></span><span id="statustext">Connecting…</span><button type="button" class="whoami" id="whoamiBtn"></button></p>
-  </div>
-
   <div class="idpick" id="setupScreen" hidden>
     <div class="idcard" style="text-align:left;max-width:400px">
-      <h2 style="text-align:center">Set up your trip</h2>
-      <p style="text-align:center">Whoever fills this in first — it syncs to both phones. Use real cities; the board and questions are generated from them.</p>
+      <div class="setuphead">
+        <span class="wordmark">Drawn Closer<span class="heart">♥</span></span>
+        <h2>Where does your line begin?</h2>
+        <p>Two names, two cities. We'll draw the route between you — it syncs to both phones.</p>
+      </div>
       <form id="setupForm" class="setupForm">
-        <label>Player 1's name<input type="text" id="setupName1" maxlength="24" required placeholder="e.g. Alex" autocomplete="off"></label>
-        <label>Player 1's city<input type="text" id="setupCity1" maxlength="60" required placeholder="e.g. Amsterdam" autocomplete="off"></label>
-        <label>Player 2's name<input type="text" id="setupName2" maxlength="24" required placeholder="e.g. Sam" autocomplete="off"></label>
-        <label>Player 2's city<input type="text" id="setupCity2" maxlength="60" required placeholder="e.g. Lisbon" autocomplete="off"></label>
+        <fieldset class="pair p1"><legend>You</legend>
+          <label>Name<input type="text" id="setupName1" maxlength="24" required placeholder="Alex" autocomplete="off"></label>
+          <label>City<input type="text" id="setupCity1" maxlength="60" required placeholder="Amsterdam" autocomplete="off"></label>
+        </fieldset>
+        <div class="pairlink" aria-hidden="true">⇅</div>
+        <fieldset class="pair p2"><legend>Them</legend>
+          <label>Name<input type="text" id="setupName2" maxlength="24" required placeholder="Sam" autocomplete="off"></label>
+          <label>City<input type="text" id="setupCity2" maxlength="60" required placeholder="Lisbon" autocomplete="off"></label>
+        </fieldset>
         <details class="setupExtra">
-          <summary>Want specific cities on the map? (optional)</summary>
-          <label>Cities to include<input type="text" id="setupExtraCities" maxlength="200" placeholder="comma-separated, e.g. Paris, Venice" autocomplete="off"></label>
+          <summary>Add stops along the way</summary>
+          <label>Cities you'd love on the map<input type="text" id="setupExtraCities" maxlength="200" placeholder="e.g. Paris, Venice" autocomplete="off"></label>
+          <small class="fine">Works best with places roughly between your two cities.</small>
         </details>
         <p class="setupError" id="setupError" hidden></p>
-        <button type="submit" class="primary big" id="setupSubmit">Build the board</button>
+        <button type="submit" class="primary big" id="setupSubmit">Draw our line</button>
       </form>
     </div>
   </div>
@@ -229,9 +280,18 @@
         <li><b>They tap what they did.</b> One answer lays <b>1 car</b>, safe. Both answers go to you for a rating: 😐 0 cars, 🙂 2, 🔥 3.</li>
         <li><b>Finish the line.</b> A route counts once all its cars are laid. When complete routes connect the two cities, whoever laid the most cars picks the first date.</li>
       </ol>
-      <p class="fine">Both phones share this board live. <button class="link" id="reset" type="button">Start a new game</button></p>
     </section>
   </div>
+
+  <footer class="invite">
+    <div class="invitehead">
+      <span class="eyebrow">Your shared board</span>
+      <p class="statusline" id="statusline"><span class="dot" id="statusdot"></span><span id="statustext">Connecting…</span></p>
+    </div>
+    <p class="hint" id="inviteHint">Send this link once — every move shows up on both phones within seconds.</p>
+    <div class="inviterow"><input readonly id="inviteUrl" onclick="this.select()"><button type="button" id="inviteCopy">Copy link</button></div>
+    <div class="footlinks"><button type="button" class="link" id="whoamiBtn"></button><button class="link" id="reset" type="button">Start a new game</button></div>
+  </footer>
 </div>
 
 <script>
@@ -858,41 +918,55 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
     picks.push({c, t: Math.max(0.02, Math.min(0.98, t)), perp: 0, big:true, forced:true, score:-1});
   });
 
-  const candidates = [];
-  for (const c of db){
-    if (c === start || c === end) continue;
-    if (cityKey(c.n) === cityKey(start.n) || cityKey(c.n) === cityKey(end.n)) continue;
-    if (forcedCities.includes(c)) continue;
-    const big = BIGFUN.has(c.n);
-    const clon = unwrap(c.lon);
-    const cx = clon - sLon, cy = c.lat - start.lat;
-    const t = (cx*dx0 + cy*dy0) / (totalDist*totalDist);
-    if (t <= 0.04 || t >= 0.96) continue;
-    const perp = Math.abs(cx*dy0 - cy*dx0) / totalDist;
-    // big/fun cities get a wider corridor and a scoring discount, so a famous
-    // city a little off the direct line still beats an obscure one right on it.
-    if (perp > maxPerp * (big ? 1.6 : 1)) continue;
-    // too close to the endpoints themselves
-    if (Math.hypot(cx,cy) < 0.35 || Math.hypot(clon-eLon, c.lat-end.lat) < 0.35) continue;
-    // too close to a forced pick — the tagged city wins the spot
-    const nearForced = picks.some(p => { const pl = unwrap(p.c.lon); return Math.hypot(clon-pl, c.lat-p.c.lat) < minSepDeg; });
-    if (nearForced) continue;
-    candidates.push({c, t, perp, big, score: big ? Math.max(0, perp - maxPerp*0.45) : perp});
-  }
+  const collect = (widen) => {
+    const out = [];
+    const mp = maxPerp * widen;
+    for (const c of db){
+      if (c === start || c === end) continue;
+      if (cityKey(c.n) === cityKey(start.n) || cityKey(c.n) === cityKey(end.n)) continue;
+      if (forcedCities.includes(c) || picks.some(p => p.c === c)) continue;
+      const big = BIGFUN.has(c.n);
+      if (widen > 1 && !big) continue; // widened passes only reach for famous places
+      const clon = unwrap(c.lon);
+      const cx = clon - sLon, cy = c.lat - start.lat;
+      const t = (cx*dx0 + cy*dy0) / (totalDist*totalDist);
+      if (t <= 0.04 || t >= 0.96) continue;
+      const perp = Math.abs(cx*dy0 - cy*dx0) / totalDist;
+      // big/fun cities get a wider corridor and a scoring discount, so a famous
+      // city a little off the direct line still beats an obscure one right on it.
+      if (perp > mp * (big && widen === 1 ? 1.6 : 1)) continue;
+      // too close to the endpoints themselves
+      if (Math.hypot(cx,cy) < 0.35 || Math.hypot(clon-eLon, c.lat-end.lat) < 0.35) continue;
+      out.push({c, t, perp, big, score: big ? Math.max(0, perp - mp*0.45) : perp});
+    }
+    return out;
+  };
 
-  const target = Math.max(0, Math.min(13, Math.round(totalDist / 1.8)) - forcedCities.length);
-  candidates.sort((p,q)=>p.t-q.t);
+  // at most 9 stops between the two ends — enough for a rich board, few
+  // enough to stay readable on a phone.
+  // tagged cities occupy the stretch of the trip they fall in, so the auto
+  // picks fill in around them instead of doubling up.
+  const target = Math.max(0, Math.min(9, Math.round(totalDist / 1.8)));
+  const filled = new Array(target).fill(false);
+  picks.forEach(p => { const b = Math.min(target-1, Math.floor(p.t*target)); if (b >= 0) filled[b] = true; });
 
   // bucket along t, pick the best-scoring (big/fun, then on-line-most)
   // candidate per bucket, enforce a minimum spacing so nodes don't crowd.
-  for (let i=0; i<target; i++){
-    const lo = i/target, hi = (i+1)/target;
-    const bucket = candidates.filter(p => p.t >= lo && p.t < hi);
-    bucket.sort((p,q)=>p.score-q.score);
-    for (const cand of bucket){
-      const clon = unwrap(cand.c.lon);
-      const tooClose = picks.some(p => { const pl = unwrap(p.c.lon); return Math.hypot(clon-pl, cand.c.lat-p.c.lat) < minSepDeg; });
-      if (!tooClose){ picks.push(cand); break; }
+  // If a stretch of the trip is mostly ocean (Tokyo↔LA), widen the corridor
+  // and try again for the still-empty stretches.
+  for (const widen of [1, 1.5]){
+    if (filled.every(Boolean)) break;
+    const candidates = collect(widen);
+    for (let i=0; i<target; i++){
+      if (filled[i]) continue;
+      const lo = i/target, hi = (i+1)/target;
+      const bucket = candidates.filter(p => p.t >= lo && p.t < hi);
+      bucket.sort((p,q)=>p.score-q.score);
+      for (const cand of bucket){
+        const clon = unwrap(cand.c.lon);
+        const tooClose = picks.some(p => { const pl = unwrap(p.c.lon); return Math.hypot(clon-pl, cand.c.lat-p.c.lat) < minSepDeg; });
+        if (!tooClose){ picks.push(cand); filled[i] = true; break; }
+      }
     }
   }
   picks.sort((p,q)=>p.t-q.t);
@@ -909,26 +983,61 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
   const startId = ids[0], endId = ids[ids.length-1];
 
   const CITIES = {};
-  nodes.forEach((n,i)=>{ CITIES[ids[i]] = {n:n.n, lon: i>0 && i<nodes.length ? unwrap(n.lon) : n.lon, lat:n.lat, end: i===0 || i===ids.length-1}; });
+  nodes.forEach((n,i)=>{ CITIES[ids[i]] = {n:n.n.replace(/\s*\([^)]*\)\s*$/,""), lon: i>0 && i<nodes.length ? unwrap(n.lon) : n.lon, lat:n.lat, end: i===0 || i===ids.length-1}; });
   // re-unwrap start/end too, for a consistent coordinate space
   CITIES[startId].lon = sLon; CITIES[endId].lon = eLon;
 
-  // ---------- edges: a chain plus skip-one shortcuts for route choice ----------
+  // ---------- edges: a clean chain (nodes are already ordered along the
+  // start→end line), plus the occasional skip-one shortcut for route choice —
+  // but only between nodes that are actually near each other in real terms,
+  // so a forced/tagged city that's far off the corridor doesn't spawn a long
+  // diagonal line raking across the whole map. ----------
   const edgeKey = (x,y)=> x<y ? x+"|"+y : y+"|"+x;
   const edgeSet = new Map(); // key -> [idA,idB]
   const addEdge = (i,j) => { if (i<0||j>=ids.length||i===j) return; const k=edgeKey(ids[i],ids[j]); if(!edgeSet.has(k)) edgeSet.set(k,[ids[i],ids[j]]); };
+  const deg = (i,j) => { const A=CITIES[ids[i]], B=CITIES[ids[j]]; return Math.hypot(A.lon-B.lon, A.lat-B.lat); };
+
   for (let i=0;i<ids.length-1;i++) addEdge(i,i+1);
-  for (let i=0;i<ids.length-2;i++) if (rng() < 0.7) addEdge(i,i+2);
-  if (ids.length >= 4 && rng() < 0.5) addEdge(0,2);
-  if (ids.length >= 4 && rng() < 0.5) addEdge(ids.length-3, ids.length-1);
+
+  // average length of the main chain, in degrees — the yardstick for whether
+  // a shortcut edge is "nearby" or a distracting long jump.
+  let chainTotal = 0;
+  for (let i=0;i<ids.length-1;i++) chainTotal += deg(i,i+1);
+  const avgChain = ids.length > 1 ? chainTotal/(ids.length-1) : 1;
+
+  for (let i=0;i<ids.length-2;i++){
+    if (rng() < 0.55 && deg(i,i+2) <= avgChain * 2.2) addEdge(i,i+2);
+  }
 
   let edges = [...edgeSet.values()];
-  if (edges.length > 26) edges = edges.slice(0,26);
+  if (edges.length > 22) edges = edges.slice(0,22);
 
   // ---------- project to the fixed viewBox (1060x620), used for pixel
   // distances (cars/theming) exactly like the original fixed map did ----------
   const VB_W=1060, VB_H=620, PAD=110;
-  const lons = ids.map(id=>CITIES[id].lon), lats = ids.map(id=>CITIES[id].lat);
+
+  // Schematic ("metro map") layout instead of raw geography: stops are spaced
+  // evenly along the start→end line (blended a little with their true
+  // position so the order still feels geographic) and keep their real side of
+  // the line, but their sideways offset is clamped. Result: no clusters of
+  // three cities in one corner, no giant empty ocean gaps, and a forced city
+  // from far away sits neatly in the line instead of raking across the map.
+  const n = ids.length;
+  const lay = ids.map((id,i)=>{
+    const c = CITIES[id];
+    if (i === 0) return {lon: sLon, lat: start.lat};
+    if (i === n-1) return {lon: eLon, lat: end.lat};
+    const cx = c.lon - sLon, cy = c.lat - start.lat;
+    const tReal = Math.max(0, Math.min(1, (cx*dx0 + cy*dy0) / (totalDist*totalDist)));
+    const u = 0.3*tReal + 0.7*(i/(n-1));
+    const vReal = (cx*dy0 - cy*dx0) / (totalDist*totalDist);
+    // half real side-of-the-line, half a steady alternating zigzag: keeps the
+    // rough geography but guarantees an even, lively Ticket-to-Ride spread.
+    const alt = (i % 2 ? 1 : -1) * 0.1;
+    const v = 0.5*Math.max(-0.2, Math.min(0.2, vReal*1.2)) + alt;
+    return { lon: sLon + u*dx0 + v*dy0, lat: start.lat + u*dy0 - v*dx0 };
+  });
+  const lons = lay.map(p=>p.lon), lats = lay.map(p=>p.lat);
   const lonMin=Math.min(...lons), lonMax=Math.max(...lons), latMin=Math.min(...lats), latMax=Math.max(...lats);
   const spanLon = Math.max(lonMax-lonMin, 0.5), spanLat = Math.max(latMax-latMin, 0.5);
   // independent per-axis scaling (not a single uniform min(sx,sy)) so a trip
@@ -936,13 +1045,15 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
   // aspect ratio, instead of leaving big empty margins on a lopsided route.
   // Each axis is still capped against the other's scale (x1.9) so a very
   // thin sliver of a route doesn't get grotesquely stretched on one axis.
-  let sx = (VB_W-2*PAD)/spanLon, sy = (VB_H-2*PAD)/spanLat;
+  // wider side margins than top/bottom: that's where the big endpoint labels live
+  const PAD_X = 190, PAD_Y = 80;
+  let sx = (VB_W-2*PAD_X)/spanLon, sy = (VB_H-2*PAD_Y)/spanLat;
   const capRatio = 1.9;
   if (sx > sy*capRatio) sx = sy*capRatio;
   if (sy > sx*capRatio) sy = sx*capRatio;
   const cxLon = (lonMin+lonMax)/2, cyLat = (latMin+latMax)/2;
   const px = (lon,lat) => [ VB_W/2 + (lon-cxLon)*sx, VB_H/2 - (lat-cyLat)*sy ];
-  ids.forEach(id=>{ const [x,y]=px(CITIES[id].lon, CITIES[id].lat); CITIES[id].x=x; CITIES[id].y=y; });
+  ids.forEach((id,i)=>{ const [x,y]=px(lay[i].lon, lay[i].lat); CITIES[id].x=x; CITIES[id].y=y; });
 
   // ---------- label anchors: push labels outward from the centroid ----------
   const centroidX = ids.reduce((s,id)=>s+CITIES[id].x,0)/ids.length;
@@ -954,13 +1065,24 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
     } else {
       c.a = "middle"; c.dx = 0; c.dy = vy >= 0 ? 24 : -18;
     }
-    // near a viewBox edge, force the label to point inward instead — the
-    // centroid heuristic above can otherwise anchor it running off the map.
-    const edge = 95;
-    if (c.x < edge){ c.a = "start"; c.dx = 14; }
-    else if (c.x > VB_W-edge){ c.a = "end"; c.dx = -14; }
-    if (c.y < edge*0.7) c.dy = Math.max(c.dy, 22);
-    else if (c.y > VB_H-edge*0.7) c.dy = Math.min(c.dy, -16);
+    // endpoints: big uppercase label pointing *outward*, away from the whole
+    // network, so it never collides with a neighbouring stop. Side-on for a
+    // mostly left↔right trip (if the name fits the margin), else above/below.
+    if (c.end){
+      const S = CITIES[startId], E = CITIES[endId];
+      const horiz = Math.abs(E.x - S.x) >= Math.abs(E.y - S.y);
+      const fits = c.n.length * 18 + 24 < PAD_X;
+      if (horiz && fits){ c.a = vx >= 0 ? "start" : "end"; c.dx = vx >= 0 ? 16 : -16; c.dy = 7; }
+      else { c.a = "middle"; c.dx = 0; c.dy = vy <= 0 ? -20 : 36; }
+    }
+    // keep every label fully inside the frame, using an estimated text width
+    const w = c.n.length * (c.end ? 18 : 8.4);
+    const left  = c.a === "start" ? c.x + c.dx : c.a === "end" ? c.x + c.dx - w : c.x + c.dx - w/2;
+    const right = left + w;
+    if (left < 10) c.dx += 10 - left;
+    else if (right > VB_W - 10) c.dx -= right - (VB_W - 10);
+    if (c.y + c.dy < 24) c.dy = 26 - c.y + 0;
+    else if (c.y + c.dy > VB_H - 10) c.dy = VB_H - 10 - c.y;
   });
 
   // ---------- themes + car counts, from the projected pixel length ----------
@@ -974,7 +1096,6 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
 
   return {ok:true, cities:CITIES, routes:ROUTES, startId, endId};
 }
-
   let PLAYERS = { M:{name:"Player 1", color:"var(--p1)"}, S:{name:"Player 2", color:"var(--p2)"} };
   const other = p => p === "M" ? "S" : "M";
 
@@ -1093,8 +1214,16 @@ function buildRoute(startQuery, endQuery, db, extraQueries){
     RB = Object.fromEntries(ROUTES.map(r=>[r.id,r]));
     START_ID = setup.startId; END_ID = setup.endId;
     tripSig = setup.startId+"|"+setup.endId+"|"+setup.routes.length;
-    document.getElementById("heroTitle").innerHTML = `${esc(CITIES[START_ID].n)} <span class="arrow">⇄</span> ${esc(CITIES[END_ID].n)}<span class="heart">♥</span>`;
-    document.getElementById("eyebrowTop").textContent = `Destination ticket · ${CITIES[START_ID].n} → ${CITIES[END_ID].n} · 2 players`;
+    const A = CITIES[START_ID], B = CITIES[END_ID];
+    document.getElementById("heroTitle").innerHTML = `${esc(A.n)} <span class="arrow">⇄</span> ${esc(B.n)}`;
+    document.getElementById("eyebrowTop").textContent = "Your destination ticket";
+    // great-circle distance between the two real cities — the number the game is about closing
+    const rad = d => d*Math.PI/180;
+    const h = Math.sin(rad(B.lat-A.lat)/2)**2 + Math.cos(rad(A.lat))*Math.cos(rad(B.lat))*Math.sin(rad(B.lon-A.lon)/2)**2;
+    const km = Math.round(6371*2*Math.asin(Math.sqrt(h)));
+    const stops = Object.keys(CITIES).length - 2;
+    document.getElementById("tripMeta").innerHTML =
+      `<b>${km.toLocaleString("en-US")} km</b> apart · ${stops} stop${stops===1?"":"s"} · ${ROUTES.length} routes`;
     drawMap();
   }
 
