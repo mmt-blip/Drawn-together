@@ -151,6 +151,12 @@
   .setupForm input{font:15px var(--body);background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
   .setupForm input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .setupError{background:rgba(229,83,75,.14);border:1px solid var(--bad);color:var(--ink);font-size:13px;border-radius:8px;padding:8px 10px;margin:0}
+  .setupExtra{border:1px dashed var(--line);border-radius:8px;padding:8px 10px}
+  .setupExtra summary{cursor:pointer;font-size:12.5px;color:var(--muted);font-weight:600;list-style:none}
+  .setupExtra summary::-webkit-details-marker{display:none}
+  .setupExtra summary::before{content:"+ ";color:var(--accent)}
+  .setupExtra[open] summary::before{content:"− "}
+  .setupExtra label{margin-top:8px}
 </style>
 </head>
 <body>
@@ -180,6 +186,10 @@
         <label>Player 1's city<input type="text" id="setupCity1" maxlength="60" required placeholder="e.g. Amsterdam" autocomplete="off"></label>
         <label>Player 2's name<input type="text" id="setupName2" maxlength="24" required placeholder="e.g. Sam" autocomplete="off"></label>
         <label>Player 2's city<input type="text" id="setupCity2" maxlength="60" required placeholder="e.g. Lisbon" autocomplete="off"></label>
+        <details class="setupExtra">
+          <summary>Want specific cities on the map? (optional)</summary>
+          <label>Cities to include<input type="text" id="setupExtraCities" maxlength="200" placeholder="comma-separated, e.g. Paris, Venice" autocomplete="off"></label>
+        </details>
         <p class="setupError" id="setupError" hidden></p>
         <button type="submit" class="primary big" id="setupSubmit">Build the board</button>
       </form>
@@ -723,11 +733,39 @@ const CITY_DB = [
 {n:"Port Moresby",lon:147.18,lat:-9.48,c:"Papua New Guinea"}
 ];
 
+// Procedural route-graph generator: given two city names and CITY_DB, produce
 // a CITIES/ROUTES graph in the same shape the game already renders/plays with.
 // Pure, synchronous, no network. Deterministic for a given input pair (seeded
 // by the pair's own names, so re-generating the same trip looks the same).
 
 const THEME_KEYS = ["flirty","love","rewind","future","career","health","travel","silly"];
+
+// Big, famous, or genuinely fun-to-see cities — preferred as waypoints over an
+// obscure-but-closer-to-the-line city, so a trip reads like a highlight reel
+// instead of a random string of secondary towns.
+const BIGFUN = new Set([
+  "London (UK)","Manchester","Glasgow","Edinburgh","Liverpool","Paris","Marseille","Lyon","Nice",
+  "Bordeaux","Berlin","Hamburg","Munich","Cologne","Frankfurt","Rome","Milan","Naples","Venice",
+  "Florence","Turin","Madrid","Barcelona","Valencia","Seville","Bilbao","Ibiza","Palma","Warsaw",
+  "Krakow","Gdansk","Amsterdam","Rotterdam","The Hague","Lisbon","Porto","Brussels","Antwerp",
+  "Bruges","Zurich","Geneva","Vienna","Salzburg","Stockholm","Gothenburg","Oslo","Bergen",
+  "Copenhagen","Helsinki","Dublin","Athens","Santorini","Mykonos","Prague","Budapest","Bucharest",
+  "Belgrade","Zagreb","Split","Dubrovnik","Ljubljana","Sarajevo","Kyiv","Vilnius","Riga","Tallinn",
+  "Moscow","Saint Petersburg","Reykjavik","Monaco","Istanbul","Antalya","New York","Los Angeles",
+  "Chicago","San Francisco","San Diego","Las Vegas","Miami","Orlando","Boston","Washington",
+  "Seattle","New Orleans","Austin","Nashville","Denver","Honolulu","Toronto","Montreal","Vancouver",
+  "Quebec City","Mexico City","Cancun","Guadalajara","Havana","Santo Domingo","San Juan","Nassau",
+  "Kingston","Bogota","Medellin","Cartagena","Lima","Cusco","Quito","La Paz","Santiago","Buenos Aires",
+  "Mendoza","Montevideo","Sao Paulo","Rio de Janeiro","Salvador","Recife","Florianopolis","Tel Aviv",
+  "Jerusalem","Beirut","Amman","Petra","Dubai","Abu Dhabi","Doha","Muscat","Marrakech","Casablanca",
+  "Cairo","Luxor","Zanzibar","Nairobi","Mombasa","Cape Town","Johannesburg","Durban","Victoria Falls",
+  "Lagos","Accra","Dakar","Beijing","Shanghai","Guangzhou","Shenzhen","Hong Kong","Macau","Chengdu",
+  "Xi'an","Hangzhou","Tokyo","Kyoto","Osaka","Yokohama","Sapporo","Fukuoka","Hiroshima","Seoul","Busan",
+  "Taipei","Kaohsiung","Mumbai","Delhi","Bangalore","Jaipur","Goa","Kathmandu","Colombo","Male",
+  "Bangkok","Chiang Mai","Phuket","Krabi","Hanoi","Ho Chi Minh City","Hoi An","Siem Reap","Luang Prabang",
+  "Yangon","Kuala Lumpur","Penang","Langkawi","Singapore","Jakarta","Bali","Denpasar","Manila","Cebu City",
+  "Sydney","Melbourne","Brisbane","Perth","Gold Coast","Cairns","Auckland","Wellington","Queenstown","Fiji","Suva"
+]);
 
 // Full name (keeps a disambiguating suffix like "(UK)" intact) vs. base name
 // (suffix stripped) — matching needs both: base for a plain "London" query to
@@ -770,13 +808,28 @@ function seededRng(seed){
   return function(){ h += 0x6D2B79F5; let t = Math.imul(h ^ (h>>>15), 1 | h); t = (t + Math.imul(t ^ (t>>>7), 61 | t)) ^ t; return ((t ^ (t>>>14)) >>> 0) / 4294967296; };
 }
 
-function buildRoute(startQuery, endQuery, db){
+function buildRoute(startQuery, endQuery, db, extraQueries){
   const a = findCity(startQuery, db), b = findCity(endQuery, db);
   if (!a.ok) return {ok:false, reason:a.reason};
   if (!b.ok) return {ok:false, reason:b.reason};
   if (a.city === b.city) return {ok:false, reason:"Pick two different cities."};
   const start = a.city, end = b.city;
   const rng = seededRng(cityKey(start.n)+"→"+cityKey(end.n));
+
+  // optional user-tagged "must appear on the map" cities — resolved the same
+  // way as start/end, with per-tag errors so a typo doesn't silently drop it.
+  const extraErrors = [];
+  const forcedCities = [];
+  (extraQueries||[]).forEach(q=>{
+    const qq = String(q||"").trim();
+    if (!qq) return;
+    const r = findCity(qq, db);
+    if (!r.ok){ extraErrors.push(`Couldn't add "${qq}": ${r.reason}`); return; }
+    if (r.city === start || r.city === end){ return; } // already on the map
+    if (forcedCities.includes(r.city)) return; // duplicate tag
+    forcedCities.push(r.city);
+  });
+  if (extraErrors.length) return {ok:false, reason: extraErrors.join(" ")};
 
   // Work in flat lon/lat space; unwrap longitude across the antimeridian so a
   // Pacific-crossing pair (e.g. Tokyo↔Los Angeles) doesn't wrap the wrong way.
@@ -791,32 +844,51 @@ function buildRoute(startQuery, endQuery, db){
   // between the endpoints and whose perpendicular distance is small relative
   // to the trip length.
   const maxPerp = Math.max(totalDist * 0.22, 0.05);
+  const minSepDeg = Math.max(totalDist * 0.06, 0.05);
+
+  // forced (user-tagged) picks go in first and bypass the normal corridor/perp
+  // filters entirely — the user explicitly asked for these — but they still
+  // get a t (for ordering along the route) and participate in the minimum-
+  // spacing check against everything chosen afterward.
+  const picks = [];
+  forcedCities.forEach(c=>{
+    const clon = unwrap(c.lon);
+    const cx = clon - sLon, cy = c.lat - start.lat;
+    const t = (cx*dx0 + cy*dy0) / (totalDist*totalDist);
+    picks.push({c, t: Math.max(0.02, Math.min(0.98, t)), perp: 0, big:true, forced:true, score:-1});
+  });
+
   const candidates = [];
   for (const c of db){
     if (c === start || c === end) continue;
     if (cityKey(c.n) === cityKey(start.n) || cityKey(c.n) === cityKey(end.n)) continue;
+    if (forcedCities.includes(c)) continue;
+    const big = BIGFUN.has(c.n);
     const clon = unwrap(c.lon);
     const cx = clon - sLon, cy = c.lat - start.lat;
     const t = (cx*dx0 + cy*dy0) / (totalDist*totalDist);
     if (t <= 0.04 || t >= 0.96) continue;
     const perp = Math.abs(cx*dy0 - cy*dx0) / totalDist;
-    if (perp > maxPerp) continue;
+    // big/fun cities get a wider corridor and a scoring discount, so a famous
+    // city a little off the direct line still beats an obscure one right on it.
+    if (perp > maxPerp * (big ? 1.6 : 1)) continue;
     // too close to the endpoints themselves
     if (Math.hypot(cx,cy) < 0.35 || Math.hypot(clon-eLon, c.lat-end.lat) < 0.35) continue;
-    candidates.push({c, t, perp});
+    // too close to a forced pick — the tagged city wins the spot
+    const nearForced = picks.some(p => { const pl = unwrap(p.c.lon); return Math.hypot(clon-pl, c.lat-p.c.lat) < minSepDeg; });
+    if (nearForced) continue;
+    candidates.push({c, t, perp, big, score: big ? Math.max(0, perp - maxPerp*0.45) : perp});
   }
 
-  const target = Math.max(0, Math.min(13, Math.round(totalDist / 1.8)));
+  const target = Math.max(0, Math.min(13, Math.round(totalDist / 1.8)) - forcedCities.length);
   candidates.sort((p,q)=>p.t-q.t);
 
-  // bucket along t, pick the on-line-most candidate per bucket, enforce a
-  // minimum spacing between picks so nodes don't crowd the map.
-  const picks = [];
-  const minSepDeg = Math.max(totalDist * 0.06, 0.05);
+  // bucket along t, pick the best-scoring (big/fun, then on-line-most)
+  // candidate per bucket, enforce a minimum spacing so nodes don't crowd.
   for (let i=0; i<target; i++){
     const lo = i/target, hi = (i+1)/target;
     const bucket = candidates.filter(p => p.t >= lo && p.t < hi);
-    bucket.sort((p,q)=>p.perp-q.perp);
+    bucket.sort((p,q)=>p.score-q.score);
     for (const cand of bucket){
       const clon = unwrap(cand.c.lon);
       const tooClose = picks.some(p => { const pl = unwrap(p.c.lon); return Math.hypot(clon-pl, cand.c.lat-p.c.lat) < minSepDeg; });
@@ -859,10 +931,17 @@ function buildRoute(startQuery, endQuery, db){
   const lons = ids.map(id=>CITIES[id].lon), lats = ids.map(id=>CITIES[id].lat);
   const lonMin=Math.min(...lons), lonMax=Math.max(...lons), latMin=Math.min(...lats), latMax=Math.max(...lats);
   const spanLon = Math.max(lonMax-lonMin, 0.5), spanLat = Math.max(latMax-latMin, 0.5);
-  const sx = (VB_W-2*PAD)/spanLon, sy = (VB_H-2*PAD)/spanLat;
-  const scale = Math.min(sx, sy);
+  // independent per-axis scaling (not a single uniform min(sx,sy)) so a trip
+  // fills the frame's width and height regardless of its true geographic
+  // aspect ratio, instead of leaving big empty margins on a lopsided route.
+  // Each axis is still capped against the other's scale (x1.9) so a very
+  // thin sliver of a route doesn't get grotesquely stretched on one axis.
+  let sx = (VB_W-2*PAD)/spanLon, sy = (VB_H-2*PAD)/spanLat;
+  const capRatio = 1.9;
+  if (sx > sy*capRatio) sx = sy*capRatio;
+  if (sy > sx*capRatio) sy = sx*capRatio;
   const cxLon = (lonMin+lonMax)/2, cyLat = (latMin+latMax)/2;
-  const px = (lon,lat) => [ VB_W/2 + (lon-cxLon)*scale, VB_H/2 - (lat-cyLat)*scale ];
+  const px = (lon,lat) => [ VB_W/2 + (lon-cxLon)*sx, VB_H/2 - (lat-cyLat)*sy ];
   ids.forEach(id=>{ const [x,y]=px(CITIES[id].lon, CITIES[id].lat); CITIES[id].x=x; CITIES[id].y=y; });
 
   // ---------- label anchors: push labels outward from the centroid ----------
@@ -1081,8 +1160,9 @@ function buildRoute(startQuery, endQuery, db){
     const n2 = document.getElementById("setupName2").value.trim();
     const c1 = document.getElementById("setupCity1").value.trim();
     const c2 = document.getElementById("setupCity2").value.trim();
+    const extra = document.getElementById("setupExtraCities").value.split(",").map(s=>s.trim()).filter(Boolean);
     const errBox = document.getElementById("setupError");
-    const result = buildRoute(c1, c2, CITY_DB);
+    const result = buildRoute(c1, c2, CITY_DB, extra);
     if (!result.ok){ errBox.textContent = result.reason; errBox.hidden = false; return; }
     errBox.hidden = true;
     S.setup = { names:{M:n1||"Player 1", S:n2||"Player 2"}, cities:result.cities, routes:result.routes, startId:result.startId, endId:result.endId };
